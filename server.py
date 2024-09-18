@@ -1,6 +1,9 @@
 import logging
 import json
+import websockets
 from websockets.asyncio.server import serve
+from typing import List
+from neighbourhood import Neighbourhood
 
 logging.basicConfig(level=logging.INFO)
 
@@ -9,6 +12,11 @@ class Server:
     def __init__(self, address: str = "localhost", port: int = 80) -> None:
         self.address = address
         self.port = port
+        self.neighbour_servers = []
+        self.neighbourhood = Neighbourhood()
+
+    def add_servers(self, server_urls: List[str]):
+        self.neighbour_servers += server_urls
 
     async def start(self):
         """
@@ -30,9 +38,9 @@ class Server:
             message_type = message.get("type", None)
 
             if message_type == "client_list_request":
-                self.send_client_list()
+                self.neighbourhood.send_client_list()
             elif message_type == "client_update_request":
-                self.send_client_update()
+                self.neighbourhood.send_client_update()
             elif message_type == "signed_data":
                 # TODO: Handle counter and signature
                 counter = message.get("counter", None)
@@ -44,7 +52,7 @@ class Server:
                         f"Type and data not found for this message: {message}"
                     )
                     continue
-                
+
                 # Handle chats
                 message_type = data.get("type", None)
                 if message_type == "chat":
@@ -65,10 +73,4 @@ class Server:
         pass
 
     def receive_public_chat(self, message):
-        pass
-
-    def send_client_update(self):
-        pass
-
-    def send_client_list(self):
         pass
