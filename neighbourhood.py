@@ -1,12 +1,15 @@
+from websockets import WebSocketClientProtocol
+
+
 class Neighbourhood:
     def __init__(self) -> None:
-        self.active_servers = []
+        self.active_servers = {}
 
-    def add_active_server(self, server_url: str):
-        self.active_servers.append(server_url)
+    def add_active_server(self, server_url: str, websocket: WebSocketClientProtocol):
+        self.active_servers[server_url] = websocket
 
     def remove_active_server(self, server_url: str):
-        self.active_servers.remove(server_url)
+        self.active_servers.pop(server_url)
 
     def broadcast_message(self, message):
         pass

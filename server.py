@@ -18,12 +18,25 @@ class Server:
     def add_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
 
+    async def connect_to_neighbourhood(self):
+        for neighbour_url in self.neighbour_servers:
+            try:
+                websocket = await websockets.connect(f"ws://{neighbour_url}")
+                self.neighbourhood.add_active_server(neighbour_url, websocket)
+                logging.info(f"Server connect to neighbour {neighbour_url}")
+            except Exception as e:
+                logging.error(
+                    f"Server failed to connect to neighbour {neighbour_url}: {e}"
+                )
+
     async def start(self):
         """
         Start the server which listens for message on the specified address and port
         """
         server = await serve(self.listen, self.address, self.port)
         logging.info(f"Server starts on port {self.port}")
+
+        await self.connect_to_neighbourhood()
         await server.wait_closed()
 
     async def listen(self, websocket):
