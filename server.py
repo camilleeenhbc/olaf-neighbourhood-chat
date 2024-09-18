@@ -30,36 +30,33 @@ class Server:
             message_type = message.get("type", None)
 
             if message_type == "client_list_request":
-                self.receive_client_list_request(message)
+                self.send_client_list()
             elif message_type == "client_update_request":
-                self.receive_client_update_request(message)
+                self.send_client_update()
             elif message_type == "signed_data":
-                pass
-            elif message_type is None:
+                # TODO: Handle counter and signature
+                counter = message.get("counter", None)
+                signature = message.get("signature", None)
+
                 data = message.get("data", None)
                 if data is None:
                     logging.error(
                         f"Type and data not found for this message: {message}"
                     )
                     continue
-
+                
+                # Handle chats
                 message_type = data.get("type", None)
                 if message_type == "chat":
-                    self.receive_chat(message)
+                    self.receive_chat(data)
                 elif message_type == "hello":
-                    self.receive_hello(message)
+                    self.receive_hello(data)
                 elif message_type == "public_chat":
-                    self.receive_public_chat(message)
+                    self.receive_public_chat(data)
                 else:
                     logging.error(f"Type not found for this message: {message}")
             else:
                 logging.error(f"Type not found for this message: {message}")
-
-    def receive_client_update_request(self, message):
-        pass
-
-    def receive_client_list_request(self, message):
-        pass
 
     def receive_chat(self, message):
         pass
