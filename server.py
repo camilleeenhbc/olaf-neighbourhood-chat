@@ -24,10 +24,10 @@ class Server:
             try:
                 websocket = await websockets.connect(f"ws://{neighbour_url}")
                 self.neighbourhood.add_active_server(neighbour_url, websocket)
-                logging.info(f"Server {self.url} connect to neighbour {neighbour_url}")
+                logging.info(f"{self.url} connect to neighbour {neighbour_url}")
             except Exception as e:
                 logging.error(
-                    f"Server {self.url} failed to connect to neighbour {neighbour_url}: {e}"
+                    f"{self.url} failed to connect to neighbour {neighbour_url}: {e}"
                 )
 
     async def start(self):
@@ -35,8 +35,6 @@ class Server:
         Start the server which listens for message on the specified address and port
         """
         server = await serve(self.listen, self.address, self.port)
-        logging.info(f"Server starts on {self.url}")
-
         await self.connect_to_neighbourhood()
         await server.wait_closed()
 
@@ -63,7 +61,7 @@ class Server:
                 data = message.get("data", None)
                 if data is None:
                     logging.error(
-                        f"Type and data not found for this message: {message}"
+                        f"{self.url}: Type and data not found for this message: {message}"
                     )
                     continue
 
@@ -76,9 +74,9 @@ class Server:
                 elif message_type == "public_chat":
                     self.receive_public_chat(data)
                 else:
-                    logging.error(f"Type not found for this message: {message}")
+                    logging.error(f"{self.url}: Type not found for this message: {message}")
             else:
-                logging.error(f"Type not found for this message: {message}")
+                logging.error(f"{self.url}: Type not found for this message: {message}")
 
     def receive_chat(self, message):
         pass

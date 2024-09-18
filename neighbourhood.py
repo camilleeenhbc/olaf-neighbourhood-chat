@@ -20,10 +20,12 @@ class Neighbourhood:
         for neighbour_url, websocket in self.active_servers.items():
             try:
                 await websocket.send(json.dumps(message))
-                logging.info(f"Server broadcasted message to {neighbour_url}")
+                logging.info(
+                    f"{self.server_url} broadcasted message to {neighbour_url}"
+                )
             except Exception as e:
                 logging.info(
-                    f"Server failed to broadcast message to {neighbour_url}: {e}"
+                    f"{self.server_url} failed to broadcast message to {neighbour_url}: {e}"
                 )
 
     def send_client_list(self):
