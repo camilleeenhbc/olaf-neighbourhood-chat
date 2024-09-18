@@ -1,9 +1,14 @@
+import json
+import logging
 from websockets import WebSocketClientProtocol
+
+logging.basicConfig(level=logging.INFO)
 
 
 class Neighbourhood:
-    def __init__(self) -> None:
-        self.active_servers = {}
+    def __init__(self, server_url) -> None:
+        self.server_url = server_url  # URL of the current server
+        self.active_servers = {}  # URL: Websocket of the active neighbour servers
 
     def add_active_server(self, server_url: str, websocket: WebSocketClientProtocol):
         self.active_servers[server_url] = websocket
@@ -11,8 +16,15 @@ class Neighbourhood:
     def remove_active_server(self, server_url: str):
         self.active_servers.pop(server_url)
 
-    def broadcast_message(self, message):
-        pass
+    async def broadcast_message(self, message):
+        for neighbour_url, websocket in self.active_servers.items():
+            try:
+                await websocket.send(json.dumps(message))
+                logging.info(f"Server broadcasted message to {neighbour_url}")
+            except Exception as e:
+                logging.info(
+                    f"Server failed to broadcast message to {neighbour_url}: {e}"
+                )
 
     def send_client_list(self):
         pass

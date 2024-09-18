@@ -12,8 +12,9 @@ class Server:
     def __init__(self, address: str = "localhost", port: int = 80) -> None:
         self.address = address
         self.port = port
+        self.url = f"{address}:{port}"
         self.neighbour_servers = []
-        self.neighbourhood = Neighbourhood()
+        self.neighbourhood = Neighbourhood(self.url)
 
     def add_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
@@ -23,10 +24,10 @@ class Server:
             try:
                 websocket = await websockets.connect(f"ws://{neighbour_url}")
                 self.neighbourhood.add_active_server(neighbour_url, websocket)
-                logging.info(f"Server connect to neighbour {neighbour_url}")
+                logging.info(f"Server {self.url} connect to neighbour {neighbour_url}")
             except Exception as e:
                 logging.error(
-                    f"Server failed to connect to neighbour {neighbour_url}: {e}"
+                    f"Server {self.url} failed to connect to neighbour {neighbour_url}: {e}"
                 )
 
     async def start(self):
@@ -34,7 +35,7 @@ class Server:
         Start the server which listens for message on the specified address and port
         """
         server = await serve(self.listen, self.address, self.port)
-        logging.info(f"Server starts on port {self.port}")
+        logging.info(f"Server starts on {self.url}")
 
         await self.connect_to_neighbourhood()
         await server.wait_closed()
@@ -45,7 +46,7 @@ class Server:
         client_update_request, chat, hello, and public_chat
         """
         async for message in websocket:
-            logging.info(f"Receive message: {message}")
+            logging.info(f"{self.url} receives message: {message}")
             message = json.loads(message)
 
             message_type = message.get("type", None)
