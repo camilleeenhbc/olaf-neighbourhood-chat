@@ -29,6 +29,18 @@ class Neighbourhood:
                 )
 
     def send_client_list(self):
+        # send a list of all connected clients to server (requesting)
+        response = {
+            "type": "client_list",
+            "servers": [
+                {
+                    "address": self.server_url, #server address
+                    "clients": [
+                        "<Exported RSA public key of client>",
+                    ]
+                },
+            ]
+        }
         pass
 
     def send_client_update(self):
