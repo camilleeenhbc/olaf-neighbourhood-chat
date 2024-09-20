@@ -44,4 +44,10 @@ class Neighbourhood:
         pass
 
     def send_client_update(self):
+        response = {
+            "type": "client_update",
+            "clients": [
+                "<Exported RSA public key of client>",
+            ]
+        }
         pass
