@@ -17,6 +17,7 @@ class Neighbourhood:
         self.active_servers.pop(server_url)
 
     async def broadcast_message(self, message):
+        """Broadcast the specified message to all active servers"""
         for neighbour_url, websocket in self.active_servers.items():
             try:
                 await websocket.send(json.dumps(message))
