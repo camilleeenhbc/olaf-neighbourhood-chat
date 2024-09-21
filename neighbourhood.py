@@ -29,7 +29,7 @@ class Neighbourhood:
                     f"{self.server_url} failed to broadcast message to {neighbour_url}: {e}"
                 )
 
-    def send_client_list(self):
+    async def send_client_list(self):
         # send a list of all connected clients to server (requesting)
         response = {
             "type": "client_list",
@@ -40,13 +40,13 @@ class Neighbourhood:
                 },
             ]
         }
-        pass
+        await self.send_response(response) #send response
 
-    def send_client_update(self):
+    async def send_client_update(self):
         response = {
             "type": "client_update",
             "clients": [
                 self.clients,
             ]
         }
-        pass
+        await self.send_response(response) #send response
