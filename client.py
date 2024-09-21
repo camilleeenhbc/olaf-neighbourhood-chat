@@ -2,9 +2,9 @@ import json
 import base64
 import os
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # for AES
 from cryptography.hazmat.primitives import hashes
-
+from cryptography.hazmat.backends import default_backend
+from cryptography.exceptions import InvalidSignature
 
 class Client:
     def __init__(self):
@@ -65,5 +65,5 @@ class Client:
                 hashes.SHA256(),
             )
             return True
-        except:
+        except InvalidSignature:
             return False
