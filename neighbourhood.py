@@ -36,9 +36,7 @@ class Neighbourhood:
             "servers": [
                 {
                     "address": self.server_url, #server address
-                    "clients": [
-                        "<Exported RSA public key of client>",
-                    ]
+                    "clients": self.clients,
                 },
             ]
         }
@@ -48,7 +46,7 @@ class Neighbourhood:
         response = {
             "type": "client_update",
             "clients": [
-                "<Exported RSA public key of client>",
+                self.clients,
             ]
         }
         pass
