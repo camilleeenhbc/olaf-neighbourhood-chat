@@ -1,8 +1,9 @@
 import logging
 import json
 import websockets
-from websockets.asyncio.server import serve
-from typing import List
+import websockets.asyncio.server as websocket_server
+from typing import List, Optional
+
 from neighbourhood import Neighbourhood
 
 logging.basicConfig(level=logging.INFO)
@@ -10,13 +11,16 @@ logging.basicConfig(level=logging.INFO)
 
 class Server:
     def __init__(self, address: str = "localhost", port: int = 80) -> None:
+        self._websocket_server: Optional[websocket_server.Server] = None
+
         self.address = address
         self.port = port
         self.url = f"{address}:{port}"
+
         self.neighbour_servers = []
         self.neighbourhood = Neighbourhood(self.url)
 
-    def add_servers(self, server_urls: List[str]):
+    def add_neighbour_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
 
     async def connect_to_neighbourhood(self):
@@ -27,16 +31,22 @@ class Server:
                 logging.info(f"{self.url} connect to neighbour {neighbour_url}")
             except Exception as e:
                 logging.error(
-                    f"{self.url} failed to connect to neighbour {neighbour_url}: {e}"
+                    f"{self.url} failed to connect to neighbour {neighbour_url}"
                 )
 
     async def start(self):
         """
         Start the server which listens for message on the specified address and port
         """
-        server = await serve(self.listen, self.address, self.port)
+        self._websocket_server = await websocket_server.serve(
+            self.listen, self.address, self.port
+        )
         await self.connect_to_neighbourhood()
-        await server.wait_closed()
+        await self._websocket_server.wait_closed()
+
+    def stop(self):
+        logging.info(f"Closing {self.url}")
+        self._websocket_server.close()
 
     async def listen(self, websocket):
         """
@@ -74,7 +84,9 @@ class Server:
                 elif message_type == "public_chat":
                     self.receive_public_chat(data)
                 else:
-                    logging.error(f"{self.url}: Type not found for this message: {message}")
+                    logging.error(
+                        f"{self.url}: Type not found for this message: {message}"
+                    )
             else:
                 logging.error(f"{self.url}: Type not found for this message: {message}")
 

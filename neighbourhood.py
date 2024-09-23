@@ -17,6 +17,7 @@ class Neighbourhood:
         self.active_servers.pop(server_url)
 
     async def broadcast_message(self, message):
+        """Broadcast the specified message to all active servers"""
         for neighbour_url, websocket in self.active_servers.items():
             try:
                 await websocket.send(json.dumps(message))
@@ -28,26 +29,24 @@ class Neighbourhood:
                     f"{self.server_url} failed to broadcast message to {neighbour_url}: {e}"
                 )
 
-    def send_client_list(self):
+    async def send_client_list(self):
         # send a list of all connected clients to server (requesting)
         response = {
             "type": "client_list",
             "servers": [
                 {
                     "address": self.server_url, #server address
-                    "clients": [
-                        "<Exported RSA public key of client>",
-                    ]
+                    "clients": self.clients,
                 },
             ]
         }
-        pass
+        await self.send_response(response) #send response
 
-    def send_client_update(self):
+    async def send_client_update(self):
         response = {
             "type": "client_update",
             "clients": [
-                "<Exported RSA public key of client>",
+                self.clients,
             ]
         }
-        pass
+        await self.send_response(response) #send response
