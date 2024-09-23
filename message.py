@@ -36,7 +36,9 @@ class Message:
     def decrypt_with_aes(self, key: bytes):
         cipher = Cipher(algorithms.AES(key), modes.GCM(self.iv))
         decryptor = cipher.decryptor()
-        self.encryptedContent = decryptor.update(self.encryptedContent.encode()) + decryptor.finalize()
+        self.encryptedContent = (
+            decryptor.update(self.encryptedContent.encode()) + decryptor.finalize()
+        )
         print(self.encryptedContent)
 
     def sign(self, client):

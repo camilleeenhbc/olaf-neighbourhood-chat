@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
 
+
 class Client:
     def __init__(self):
         self.counter = 0
@@ -30,15 +31,15 @@ class Client:
             ),
         )
 
-    #Decrypt the AES key
+    # Decrypt the AES key
     def decrypt(self, aesKey):
         return self.private_key.decrypt(
             aesKey,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
-                label=None
-            )
+                label=None,
+            ),
         )
 
     # Sign the message using the RSA-PSS scheme

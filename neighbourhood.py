@@ -35,18 +35,18 @@ class Neighbourhood:
             "type": "client_list",
             "servers": [
                 {
-                    "address": self.server_url, #server address
+                    "address": self.server_url,  # server address
                     "clients": self.clients,
                 },
-            ]
+            ],
         }
-        await self.send_response(response) #send response
+        await self.send_response(response)  # send response
 
     async def send_client_update(self):
         response = {
             "type": "client_update",
             "clients": [
                 self.clients,
-            ]
+            ],
         }
-        await self.send_response(response) #send response
+        await self.send_response(response)  # send response
