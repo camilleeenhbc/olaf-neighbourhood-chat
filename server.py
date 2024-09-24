@@ -20,6 +20,8 @@ class Server:
         self.neighbour_servers = []
         self.neighbourhood = Neighbourhood(self.url)
 
+        self.clients = [] # List of clients connecting to this server
+
     def add_neighbour_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
 
@@ -45,13 +47,13 @@ class Server:
             self.listen, self.address, self.port
         )
         await self.connect_to_neighbourhood()
-        await self.neighbourhood.request_client_update()
+        await self.request_client_update()
         await self._websocket_server.wait_closed()
 
     async def stop(self):
         logging.info(f"Closing {self.url}")
-        self.neighbourhood.clients = []
-        await self.neighbourhood.request_client_update()
+        self.clients = []
+        await self.request_client_update()
         self._websocket_server.close()
 
     async def listen(self, websocket):
@@ -68,7 +70,7 @@ class Server:
             if message_type == "client_list_request":
                 await self.send_client_list(websocket)
             elif message_type == "client_update_request":
-                await self.neighbourhood.send_client_update()
+                await self.send_client_update()
             elif message_type == "signed_data":
                 # TODO: Handle counter and signature
                 counter = message.get("counter", None)
@@ -104,8 +106,8 @@ class Server:
 
     async def receive_hello(self, message):
         client_public_key = message["public_key"]
-        self.neighbourhood.clients.append(client_public_key)
-        await self.neighbourhood.send_client_update()
+        self.clients.append(client_public_key)
+        await self.send_client_update()
 
     async def receive_public_chat(self, message):
         pass
@@ -117,8 +119,32 @@ class Server:
             "servers": [
                 {
                     "address": self.url,  # server address
-                    "clients": self.neighbourhood.clients,
+                    "clients": [],
                 },
             ],
         }
         await self.send_message(websocket, response, request=False)
+
+    async def send_client_update(self):
+        """
+        (Between servers) Send client update to all active servers
+        when a client sends `hello` or disconnects
+        """
+        response = {
+            "type": "client_update",
+            "clients": [
+                "<Exported RSA public key of client>",
+            ],
+        }
+        await self.neighbourhood.broadcast_message(response, request=False)
+
+    async def request_client_update(self):
+        """
+        (Between servers) Send request client update to all servers.
+        Expect to receive an updated client list for each server.
+        """
+        request = {
+            "type": "client_update_request",
+        }
+        client_lists = await self.neighbourhood.broadcast_message(request, request=True)
+        logging.info(f"{self.url} receives client list: {client_lists}")
