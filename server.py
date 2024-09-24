@@ -67,46 +67,51 @@ class Server:
         """
         async for message in websocket:
             # logging.info(f"{self.url} receives message: {message}")
-            message = json.loads(message)
+            await self.handle_message(websocket, message)
 
-            message_type = message.get("type", None)
+    async def handle_message(self, websocket, message):
+        """
+        Handle messages of type: signed_data, client_list_request,
+        client_update_request, chat, hello, and public_chat
+        """
+        message = json.loads(message)
 
-            if message_type == "client_list_request":
-                logging.info(f"{self.url} receives {message_type} message")
-                await self.send_client_list(websocket)
-            elif message_type == "client_update_request":
-                logging.info(f"{self.url} receives {message_type} message")
-                await self.send_client_update()
-            elif message_type == "client_update":
-                logging.info(f"{self.url} receives {message_type} message")
-                await self.receive_client_update(websocket, message)
-            elif message_type == "signed_data":
-                # TODO: Handle counter and signature
-                counter = message.get("counter", None)
-                signature = message.get("signature", None)
+        message_type = message.get("type", None)
 
-                data = message.get("data", None)
-                if data is None:
-                    logging.error(
-                        f"{self.url}: Type and data not found for this message: {message}"
-                    )
-                    continue
+        if message_type == "client_list_request":
+            logging.info(f"{self.url} receives {message_type} message")
+            await self.send_client_list(websocket)
+        elif message_type == "client_update_request":
+            logging.info(f"{self.url} receives {message_type} message")
+            await self.send_client_update()
+        elif message_type == "client_update":
+            logging.info(f"{self.url} receives {message_type} message")
+            await self.receive_client_update(websocket, message)
+        elif message_type == "signed_data":
+            # TODO: Handle counter and signature
+            counter = message.get("counter", None)
+            signature = message.get("signature", None)
 
-                # Handle chats
-                message_type = data.get("type", None)
-                logging.info(f"{self.url} receives {message_type} message")
-                if message_type == "chat":
-                    await self.receive_chat(data)
-                elif message_type == "hello":
-                    await self.receive_hello(data)
-                elif message_type == "public_chat":
-                    await self.receive_public_chat(data)
-                else:
-                    logging.error(
-                        f"{self.url}: Type not found for this message: {message}"
-                    )
+            data = message.get("data", None)
+            if data is None:
+                logging.error(
+                    f"{self.url}: Type and data not found for this message: {message}"
+                )
+                return
+
+            # Handle chats
+            message_type = data.get("type", None)
+            logging.info(f"{self.url} receives {message_type} message")
+            if message_type == "chat":
+                await self.receive_chat(data)
+            elif message_type == "hello":
+                await self.receive_hello(data)
+            elif message_type == "public_chat":
+                await self.receive_public_chat(data)
             else:
                 logging.error(f"{self.url}: Type not found for this message: {message}")
+        else:
+            logging.error(f"{self.url}: Type not found for this message: {message}")
 
     async def send_message(self, websocket, message, request: bool):
         return await self.neighbourhood.send_message(websocket, message, request)
