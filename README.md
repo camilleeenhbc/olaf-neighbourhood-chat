@@ -10,6 +10,10 @@ Brooke Egret Luxi Wang a1828458 <br />
 
 
 # How to Run
+## Install dependencies
+```
+pip install -r requirements.txt
+```
 
 # List of Dependencies 
 
