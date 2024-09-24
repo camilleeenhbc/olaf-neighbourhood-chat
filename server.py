@@ -65,9 +65,12 @@ class Server:
         Listen and handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        async for message in websocket:
-            # logging.info(f"{self.url} receives message: {message}")
-            await self.handle_message(websocket, message)
+        while True:
+            try:
+                message = await websocket.recv()
+                await self.handle_message(websocket, message)
+            except websockets.ConnectionClosed:
+                break    
 
     async def handle_message(self, websocket, message):
         """
