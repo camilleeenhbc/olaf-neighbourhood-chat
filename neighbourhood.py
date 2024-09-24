@@ -21,6 +21,12 @@ class Neighbourhood:
     def remove_active_server(self, server_url: str):
         self.active_servers.pop(server_url)
 
+    def get_flatten_clients(self):
+        clients = []
+        for client_list in self.clients_across_servers.values():
+            clients += client_list
+        return clients
+
     async def send_message(self, websocket, message, request: bool):
         """Send message to a specific websocket"""
         if websocket is None:

@@ -20,7 +20,7 @@ class Server:
         self.neighbour_servers = []
         self.neighbourhood = Neighbourhood(self.url)
 
-        self.clients = [] # List of clients connecting to this server
+        self.clients = []  # List of clients connecting to this server
 
     def add_neighbour_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
@@ -62,14 +62,16 @@ class Server:
         client_update_request, chat, hello, and public_chat
         """
         async for message in websocket:
-            logging.info(f"{self.url} receives message: {message}")
+            # logging.info(f"{self.url} receives message: {message}")
             message = json.loads(message)
 
             message_type = message.get("type", None)
 
             if message_type == "client_list_request":
+                logging.info(f"{self.url} receives {message_type} message")
                 await self.send_client_list(websocket)
             elif message_type == "client_update_request":
+                logging.info(f"{self.url} receives {message_type} message")
                 await self.send_client_update()
             elif message_type == "signed_data":
                 # TODO: Handle counter and signature
@@ -85,6 +87,7 @@ class Server:
 
                 # Handle chats
                 message_type = data.get("type", None)
+                logging.info(f"{self.url} receives {message_type} message")
                 if message_type == "chat":
                     await self.receive_chat(data)
                 elif message_type == "hello":
@@ -114,12 +117,13 @@ class Server:
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
+        all_clients = self.neighbourhood.get_flatten_clients()
         response = {
             "type": "client_list",
             "servers": [
                 {
                     "address": self.url,  # server address
-                    "clients": [],
+                    "clients": all_clients,
                 },
             ],
         }

@@ -23,7 +23,7 @@ async def main():
 
     # Server 0 broadcasts to all other servers
     await asyncio.sleep(2)
-    await servers[0].neighbourhood.broadcast_message({"type": "random"})
+    await servers[0].neighbourhood.broadcast_message({"type": "client_list_request"})
 
     # Stop server 1
     await asyncio.sleep(2)
@@ -31,7 +31,7 @@ async def main():
 
     # Server 0 re broadcasts
     await asyncio.sleep(2)
-    await servers[0].neighbourhood.broadcast_message({"type": "random"})
+    await servers[0].neighbourhood.broadcast_message({"type": "client_list_request"})
 
     # Stop all servers
     for server in servers:
