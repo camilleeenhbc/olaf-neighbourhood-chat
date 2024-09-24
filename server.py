@@ -82,13 +82,10 @@ class Server:
         message_type = message.get("type", None)
 
         if message_type == "client_list_request":
-            logging.info(f"{self.url} receives {message_type} message")
             await self.send_client_list(websocket)
         elif message_type == "client_update_request":
-            logging.info(f"{self.url} receives {message_type} message")
             await self.send_client_update()
         elif message_type == "client_update":
-            logging.info(f"{self.url} receives {message_type} message")
             await self.receive_client_update(message)
         elif message_type == "signed_data":
             # TODO: Handle counter and signature
@@ -137,11 +134,12 @@ class Server:
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
+        logging.info(f"{self.url} sends client list")
 
+        all_clients = self.neighbourhood.clients_across_servers
         # Reformat the each server's client list
         servers = []
-        for websocket, clients in self.neighbourhood.clients_across_servers.items():
-            server_address = self.neighbourhood.active_servers.get(websocket, None)
+        for server_address, clients in all_clients.items():
             servers.append(
                 {
                     "address": server_address,
@@ -160,6 +158,8 @@ class Server:
         (Between servers) Send client update to all active servers
         when a client sends `hello` or disconnects
         """
+        logging.info(f"{self.url} sends client update to all servers")
+
         response = {
             "type": "client_update",
             "address": self.url,
@@ -172,6 +172,8 @@ class Server:
         (Between servers) Send request client update to all servers.
         Expect to receive an updated client list for each server.
         """
+        logging.info(f"{self.url} requests client update from all servers")
+
         request = {
             "type": "client_update_request",
         }
@@ -181,3 +183,4 @@ class Server:
         clients = message["clients"]
         server_url = message["address"]
         self.neighbourhood.save_clients(server_url, clients)
+        logging.info(f"{self.url} receives client update from {server_url}: {clients}")
