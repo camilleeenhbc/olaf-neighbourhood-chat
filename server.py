@@ -21,7 +21,10 @@ class Server:
         self.neighbourhood = Neighbourhood(self.url)
 
         # TODO: Change to real list of client RSAs
-        self.clients = [f"RSA1-{port}", f"RSA2-{port}"]  # List of clients connecting to this server
+        self.clients = [
+            f"RSA1-{port}",
+            f"RSA2-{port}",
+        ]  # List of clients connecting to this server
 
     def add_neighbour_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
@@ -34,7 +37,7 @@ class Server:
             try:
                 websocket = await websockets.connect(f"ws://{neighbour_url}")
                 self.neighbourhood.add_active_server(neighbour_url, websocket)
-                logging.info(f"{self.url} connect to neighbour {neighbour_url}")
+                logging.debug(f"{self.url} connect to neighbour {neighbour_url}")
             except Exception as e:
                 logging.error(
                     f"{self.url} failed to connect to neighbour {neighbour_url}"
@@ -121,15 +124,21 @@ class Server:
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
-        # all_clients = self.neighbourhood.get_flatten_clients()
+
+        # Reformat the each server's client list
+        servers = []
+        for websocket, clients in self.neighbourhood.clients_across_servers.items():
+            server_address = self.neighbourhood.active_servers.get(websocket, None)
+            servers.append(
+                {
+                    "address": server_address,
+                    "clients": clients,
+                }
+            )
+
         response = {
             "type": "client_list",
-            "servers": [
-                {
-                    "address": self.url,  # server address
-                    "clients": self.neighbourhood.clients_across_servers,
-                },
-            ],
+            "servers": servers,
         }
         await self.send_message(websocket, response, request=False)
 
@@ -156,4 +165,8 @@ class Server:
 
     async def receive_client_update(self, websocket, message):
         clients = message["clients"]
-        
+        # print(websocket.remote_address)
+        # address, port = websocket.remote_address
+        # server_url = f"{address}:{port}"
+        server_url = self.neighbourhood.active_servers.get(websocket, None)
+        logging.info(f"{self.url} receives client update from {server_url}: {clients}")

@@ -13,7 +13,6 @@ class Neighbourhood:
         # Format: {websocket1: ["RSA1", "RSA2"], websocket2: ["RSA3"]}
         self.clients_across_servers = {}
 
-        # self.server_url = server_url  # URL of the current server
         self.active_servers = {}  # URL: Websocket of the active neighbour servers
 
     def add_active_server(self, server_url: str, websocket: WebSocketClientProtocol):
@@ -33,7 +32,7 @@ class Neighbourhood:
     async def send_message(self, receiver_websocket, message, request: bool):
         """Send message to a specific websocket"""
         if receiver_websocket is None:
-            logging.error(f"failed to send message: Receiver isn't active")
+            logging.error("failed to send message: Receiver isn't active")
             return
 
         try:
@@ -46,10 +45,9 @@ class Neighbourhood:
     async def broadcast_message(self, message, request: bool = True):
         """Broadcast the specified message to all active servers"""
         tasks = []
-        for neighbour_url, websocket in self.active_servers.items():
+        for websocket in self.active_servers.keys():
             tasks.append(
                 asyncio.create_task(self.send_message(websocket, message, request))
             )
 
-        futures = await asyncio.gather(*tasks)
-        logging.info(f"Broadcasting received: {futures}")
+        await asyncio.gather(*tasks)
