@@ -19,9 +19,35 @@ class Message:
         self.messageType = messageType
         self.destinationServers = destinationServers if destinationServers else []
 
+
+    # Function to encrypt the AES key
+    def encrypt(self, receiverPublicKey, aesKey):
+        return receiverPublicKey.encrypt(
+            aesKey,
+            # Apply OAEP padding
+            padding.OAEP(
+                # SHA-256 digest/hash function used
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+
+    # Decrypt the AES key
+    def decrypt(self, aesKey):
+        return self.private_key.decrypt(
+            aesKey,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+    
+    
     # Perform AES in GCM mode
     # Key length of 32 bytes (128 bits)
-    def encryptWithAES(self, key):
+    def encryptWithAES(self, key, receiverPublicKey):
         # IV should be 16 bytes (randomly generated)
         self.iv = os.urandom(16)
 
@@ -30,19 +56,23 @@ class Message:
         self.encryptedContent = (
             encryptor.update(self.content.encode()) + encryptor.finalize()
         )
+        
+        #encrypt AES key with RSA
+        encryptedAES = self.encrypt(receiverPublicKey,key )
+        
         # Encode key with base64
-        self.symmKeys.append(base64.b64encode(key).decode())
-
+        self.symmKeys.append(base64.b64encode(encryptedAES).decode())
+        
     def decrypt_with_aes(self, key: bytes):
         cipher = Cipher(algorithms.AES(key), modes.GCM(self.iv))
         decryptor = cipher.decryptor()
-        self.encryptedContent = (
+        decryptedContent = (
             decryptor.update(self.encryptedContent.encode()) + decryptor.finalize()
         )
-        print(self.encryptedContent)
-
+        return decryptedContent.decode()
+    
     def sign(self, client):
-        message = self.content + str(self.counter).encode()
+        message = self.content.encode() + str(self.counter).encode()
         self.signature = client.signMessage(message)
 
     def formatChat(self):

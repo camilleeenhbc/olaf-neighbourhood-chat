@@ -59,29 +59,7 @@ class Client:
         except Exception as e:
             logging.error(f"Error in receiving message: {e}")
 
-    # Function to encrypt the AES key
-    def encrypt(self, receiverPublicKey, aesKey):
-        return receiverPublicKey.encrypt(
-            aesKey,
-            # Apply OAEP padding
-            padding.OAEP(
-                # SHA-256 digest/hash function used
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None,
-            ),
-        )
 
-    # Decrypt the AES key
-    def decrypt(self, aesKey):
-        return self.private_key.decrypt(
-            aesKey,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None,
-            ),
-        )
 
     # Sign the message using the RSA-PSS scheme
     # Signature should be Base64 of data + counter
