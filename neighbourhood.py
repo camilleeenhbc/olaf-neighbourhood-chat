@@ -1,52 +1,43 @@
 import json
 import logging
+import asyncio
 from websockets import WebSocketClientProtocol
+from typing import List
 
 logging.basicConfig(level=logging.INFO)
 
 
 class Neighbourhood:
     def __init__(self, server_url) -> None:
-        self.server_url = server_url  # URL of the current server
-        self.active_servers = {}  # URL: Websocket of the active neighbour servers
+        self.server_url = server_url
+
+        # List of all connected clients on all servers.
+        # Format: {server_url1: ["RSA1", "RSA2"], server_url2: ["RSA3"]}
+        self.clients_across_servers = {}
+
+        # Format: neighbour url: Websocket (ClientProtocol)
+        self.active_servers = {}
 
     def add_active_server(self, server_url: str, websocket: WebSocketClientProtocol):
-        self.active_servers[server_url] = websocket
+        self.active_servers[websocket] = server_url
 
-    def remove_active_server(self, server_url: str):
-        self.active_servers.pop(server_url)
+    def remove_active_server(self, websocket: WebSocketClientProtocol):
+        self.active_servers.pop(websocket)
 
-    async def broadcast_message(self, message):
-        """Broadcast the specified message to all active servers"""
-        for neighbour_url, websocket in self.active_servers.items():
-            try:
-                await websocket.send(json.dumps(message))
-                logging.info(
-                    f"{self.server_url} broadcasted message to {neighbour_url}"
-                )
-            except Exception as e:
-                logging.info(
-                    f"{self.server_url} failed to broadcast message to {neighbour_url}: {e}"
-                )
+    def save_clients(self, server_url: str, client_list: List[str]):
+        self.clients_across_servers[server_url] = client_list
 
-    async def send_client_list(self):
-        # send a list of all connected clients to server (requesting)
-        response = {
-            "type": "client_list",
-            "servers": [
-                {
-                    "address": self.server_url, #server address
-                    "clients": self.clients,
-                },
-            ]
-        }
-        await self.send_response(response) #send response
+    async def send_request(self, receiver_websocket: WebSocketClientProtocol, message):
+        """Send request to a specific websocket"""
+        try:
+            await receiver_websocket.send(json.dumps(message))
+        except Exception as e:
+            logging.info(f"{self.server_url} failed to send request: {e}")
 
-    async def send_client_update(self):
-        response = {
-            "type": "client_update",
-            "clients": [
-                self.clients,
-            ]
-        }
-        await self.send_response(response) #send response
+    async def broadcast_request(self, message):
+        """Broadcast the specified request to all active servers"""
+        tasks = []
+        for websocket in self.active_servers.keys():
+            tasks.append(asyncio.create_task(self.send_request(websocket, message)))
+
+        await asyncio.gather(*tasks)
