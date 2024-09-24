@@ -70,7 +70,7 @@ class Server:
                 message = await websocket.recv()
                 await self.handle_message(websocket, message)
             except websockets.ConnectionClosed:
-                break    
+                break
 
     async def handle_message(self, websocket, message):
         """
@@ -89,7 +89,7 @@ class Server:
             await self.send_client_update()
         elif message_type == "client_update":
             logging.info(f"{self.url} receives {message_type} message")
-            await self.receive_client_update(websocket, message)
+            await self.receive_client_update(message)
         elif message_type == "signed_data":
             # TODO: Handle counter and signature
             counter = message.get("counter", None)
@@ -116,8 +116,13 @@ class Server:
         else:
             logging.error(f"{self.url}: Type not found for this message: {message}")
 
-    async def send_message(self, websocket, message, request: bool):
-        return await self.neighbourhood.send_message(websocket, message, request)
+    async def send_response(
+        self, websocket: websocket_server.ServerConnection, message
+    ):
+        try:
+            await websocket.send(json.dumps(message))
+        except Exception as e:
+            logging.error(f"{self.url} failed to send response: {e}")
 
     async def receive_chat(self, message):
         pass
@@ -148,7 +153,7 @@ class Server:
             "type": "client_list",
             "servers": servers,
         }
-        await self.send_message(websocket, response, request=False)
+        await self.send_response(websocket, response)
 
     async def send_client_update(self):
         """
@@ -157,9 +162,10 @@ class Server:
         """
         response = {
             "type": "client_update",
+            "address": self.url,
             "clients": self.clients,
         }
-        await self.neighbourhood.broadcast_message(response, request=False)
+        await self.neighbourhood.broadcast_request(response)
 
     async def request_client_update(self):
         """
@@ -169,12 +175,9 @@ class Server:
         request = {
             "type": "client_update_request",
         }
-        await self.neighbourhood.broadcast_message(request, request=True)
+        await self.neighbourhood.broadcast_request(request)
 
-    async def receive_client_update(self, websocket, message):
+    async def receive_client_update(self, message):
         clients = message["clients"]
-        # print(websocket.remote_address)
-        # address, port = websocket.remote_address
-        # server_url = f"{address}:{port}"
-        server_url = self.neighbourhood.active_servers.get(websocket, None)
-        logging.info(f"{self.url} receives client update from {server_url}: {clients}")
+        server_url = message["address"]
+        self.neighbourhood.save_clients(server_url, clients)
