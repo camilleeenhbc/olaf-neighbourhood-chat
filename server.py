@@ -25,6 +25,9 @@ class Server:
 
     async def connect_to_neighbourhood(self):
         for neighbour_url in self.neighbour_servers:
+            if neighbour_url in self.neighbourhood.active_servers:
+                continue
+
             try:
                 websocket = await websockets.connect(f"ws://{neighbour_url}")
                 self.neighbourhood.add_active_server(neighbour_url, websocket)
@@ -42,10 +45,13 @@ class Server:
             self.listen, self.address, self.port
         )
         await self.connect_to_neighbourhood()
+        await self.neighbourhood.request_client_update()
         await self._websocket_server.wait_closed()
 
-    def stop(self):
+    async def stop(self):
         logging.info(f"Closing {self.url}")
+        self.neighbourhood.clients = []
+        await self.neighbourhood.request_client_update()
         self._websocket_server.close()
 
     async def listen(self, websocket):
@@ -60,9 +66,9 @@ class Server:
             message_type = message.get("type", None)
 
             if message_type == "client_list_request":
-                self.neighbourhood.send_client_list()
+                await self.send_client_list(websocket)
             elif message_type == "client_update_request":
-                self.neighbourhood.send_client_update()
+                await self.neighbourhood.send_client_update()
             elif message_type == "signed_data":
                 # TODO: Handle counter and signature
                 counter = message.get("counter", None)
@@ -78,11 +84,11 @@ class Server:
                 # Handle chats
                 message_type = data.get("type", None)
                 if message_type == "chat":
-                    self.receive_chat(data)
+                    await self.receive_chat(data)
                 elif message_type == "hello":
-                    self.receive_hello(data)
+                    await self.receive_hello(data)
                 elif message_type == "public_chat":
-                    self.receive_public_chat(data)
+                    await self.receive_public_chat(data)
                 else:
                     logging.error(
                         f"{self.url}: Type not found for this message: {message}"
@@ -90,11 +96,29 @@ class Server:
             else:
                 logging.error(f"{self.url}: Type not found for this message: {message}")
 
-    def receive_chat(self, message):
+    async def send_message(self, websocket, message, request: bool):
+        return await self.neighbourhood.send_message(websocket, message, request)
+
+    async def receive_chat(self, message):
         pass
 
-    def receive_hello(self, message):
+    async def receive_hello(self, message):
+        client_public_key = message["public_key"]
+        self.neighbourhood.clients.append(client_public_key)
+        await self.neighbourhood.send_client_update()
+
+    async def receive_public_chat(self, message):
         pass
 
-    def receive_public_chat(self, message):
-        pass
+    async def send_client_list(self, websocket):
+        """(Between server and client) Provide the client the client list on all servers"""
+        response = {
+            "type": "client_list",
+            "servers": [
+                {
+                    "address": self.url,  # server address
+                    "clients": self.neighbourhood.clients,
+                },
+            ],
+        }
+        await self.send_message(websocket, response, request=False)

@@ -35,10 +35,9 @@ async def main():
 
     # Stop all servers
     for server in servers:
-        server.stop()
+        await server.stop()
 
     await asyncio.gather(*start_tasks)
 
 
 asyncio.run(main())
-
