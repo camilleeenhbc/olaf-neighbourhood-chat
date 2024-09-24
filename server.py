@@ -20,7 +20,8 @@ class Server:
         self.neighbour_servers = []
         self.neighbourhood = Neighbourhood(self.url)
 
-        self.clients = []  # List of clients connecting to this server
+        # TODO: Change to real list of client RSAs
+        self.clients = [f"RSA1-{port}", f"RSA2-{port}"]  # List of clients connecting to this server
 
     def add_neighbour_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
@@ -73,6 +74,9 @@ class Server:
             elif message_type == "client_update_request":
                 logging.info(f"{self.url} receives {message_type} message")
                 await self.send_client_update()
+            elif message_type == "client_update":
+                logging.info(f"{self.url} receives {message_type} message")
+                await self.receive_client_update(websocket, message)
             elif message_type == "signed_data":
                 # TODO: Handle counter and signature
                 counter = message.get("counter", None)
@@ -117,13 +121,13 @@ class Server:
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
-        all_clients = self.neighbourhood.get_flatten_clients()
+        # all_clients = self.neighbourhood.get_flatten_clients()
         response = {
             "type": "client_list",
             "servers": [
                 {
                     "address": self.url,  # server address
-                    "clients": all_clients,
+                    "clients": self.neighbourhood.clients_across_servers,
                 },
             ],
         }
@@ -136,9 +140,7 @@ class Server:
         """
         response = {
             "type": "client_update",
-            "clients": [
-                "<Exported RSA public key of client>",
-            ],
+            "clients": self.clients,
         }
         await self.neighbourhood.broadcast_message(response, request=False)
 
@@ -150,5 +152,8 @@ class Server:
         request = {
             "type": "client_update_request",
         }
-        client_lists = await self.neighbourhood.broadcast_message(request, request=True)
-        logging.info(f"{self.url} receives client list: {client_lists}")
+        await self.neighbourhood.broadcast_message(request, request=True)
+
+    async def receive_client_update(self, websocket, message):
+        clients = message["clients"]
+        
