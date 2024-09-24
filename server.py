@@ -72,7 +72,9 @@ class Server:
             except websockets.ConnectionClosed:
                 break
 
-    async def handle_message(self, websocket, message):
+    async def handle_message(
+        self, websocket: websocket_server.ServerConnection, message
+    ):
         """
         Handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
@@ -84,7 +86,7 @@ class Server:
         if message_type == "client_list_request":
             await self.send_client_list(websocket)
         elif message_type == "client_update_request":
-            await self.send_client_update()
+            await self.send_client_update(websocket)
         elif message_type == "client_update":
             await self.receive_client_update(message)
         elif message_type == "signed_data":
@@ -153,10 +155,11 @@ class Server:
         }
         await self.send_response(websocket, response)
 
-    async def send_client_update(self):
+    async def send_client_update(self, websocket=None):
         """
-        (Between servers) Send client update to all active servers
-        when a client sends `hello` or disconnects
+        (Between servers) If websocket is None, send client update to all active servers
+        when a client sends `hello` or disconnects.
+        Otherwise, send to the specified websocket
         """
         logging.info(f"{self.url} sends client update to all servers")
 
@@ -165,7 +168,11 @@ class Server:
             "address": self.url,
             "clients": self.clients,
         }
-        await self.neighbourhood.broadcast_request(response)
+
+        if websocket is None:
+            await self.neighbourhood.broadcast_request(response)
+        else:
+            await self.send_response(websocket, response)
 
     async def request_client_update(self):
         """

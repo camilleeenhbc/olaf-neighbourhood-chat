@@ -27,17 +27,32 @@ class Neighbourhood:
     def save_clients(self, server_url: str, client_list: List[str]):
         self.clients_across_servers[server_url] = client_list
 
-    async def send_request(self, receiver_websocket: WebSocketClientProtocol, message):
+    async def send_request(
+        self,
+        receiver_websocket: WebSocketClientProtocol,
+        message,
+        wait_for_response: bool = False,
+    ):
         """Send request to a specific websocket"""
         try:
             await receiver_websocket.send(json.dumps(message))
+            if wait_for_response is True:
+                message = await receiver_websocket.recv()
+                logging.info(f"{self.server_url} receives: {message}")
+                return message
         except Exception as e:
             logging.info(f"{self.server_url} failed to send request: {e}")
 
-    async def broadcast_request(self, message):
+    async def broadcast_request(self, message, wait_for_response: bool = False):
         """Broadcast the specified request to all active servers"""
         tasks = []
         for websocket in self.active_servers.keys():
-            tasks.append(asyncio.create_task(self.send_request(websocket, message)))
+            tasks.append(
+                asyncio.create_task(
+                    self.send_request(websocket, message, wait_for_response)
+                )
+            )
 
-        await asyncio.gather(*tasks)
+        responses = await asyncio.gather(*tasks)
+        if wait_for_response is True:
+            return responses
