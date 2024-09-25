@@ -8,7 +8,6 @@ import hashlib
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
 from message import Message
@@ -54,7 +53,7 @@ class Client:
             ),
             hashes.SHA256(),
         )
-        self.signature = base64.b64.encode(signature).decode()
+        self.signature = base64.b64encode(signature).decode()
         return self.signature
 
     def verify_signature(self, public_key):
@@ -91,36 +90,70 @@ class Client:
         except Exception as e:
             logging.error(f"Error in receiving message: {e}")
 
-    # SEND MESSAGES
-    async def send_hello(self, websocket):
-        """Send the hello message with public key"""
-        hello_message = {
-            "data": {"type": "hello", "public_key": self.export_public_key().decode()}
-        }
-        await websocket.send(json.dumps(hello_message))
-        logging.info(f"Sent hello message to {self.server_url}")
 
-    async def send_chat(
-        self, websocket, message_content, destination_servers, recipient_public_keys
+
+    # SEND MESSAGE
+    async def send_message(
+        self,
+        websocket,
+        message_content="",
+        chat_type="chat",
+        destination_servers=[],
+        recipient_public_keys=[],
+        participants=[],
     ):
-        """Send an encrypted chat message."""
-        # Prepare the encrypted chat message with the Message class
-        message = Message(message_content)
+        
+        if chat_type == "hello":
+            chat_message = {
+                "data": {
+                    "type": "hello",
+                    "public_key": self.export_public_key().decode(),  # Exporting public key as PEM format
+                }
+            }
 
-        # Prepare the chat message (encrypt it and structure it properly)
-        chat_data = message.prepare_chat_message(
-            recipient_public_keys, destination_servers
-        )
+        elif chat_type == "chat":  # Private chat
+            message = Message(message_content)
+            chat_message = message.prepare_chat_message(
+                chat_type="chat",
+                recipient_public_keys=recipient_public_keys,
+                destination_servers=destination_servers,
+            )
 
-        signed_chat_message = {
+        elif chat_type == "group_chat":  # Group chat
+            message = Message(message_content)
+            chat_message = message.prepare_chat_message(
+                chat_type="group_chat",
+                recipient_public_keys=recipient_public_keys,
+                destination_servers=destination_servers,
+                participants=participants,
+            )
+
+        elif chat_type == "public_chat":  # Public chat
+            chat_message = {
+                "data": {
+                    "type": "public_chat",
+                    "sender": self.fingerprint,
+                    "message": message_content,
+                }
+            }
+
+        else:
+            logging.error("Invalid chat type specified.")
+            return
+
+
+        # Sign message except for public chat
+        # if chat_type != "public_chat":
+        chat_message_bytes = json.dumps(chat_message).encode()
+        signed_message = {
             "type": "signed_data",
-            "data": chat_data,
+            "data": chat_message,
             "counter": self.counter,
-            "signature": self.sign_message(chat_data),
+            "signature": self.sign_message(chat_message_bytes),
         }
-
-        await websocket.send(json.dumps(signed_chat_message))
-        logging.info("Sent encrypted chat message")
+        await websocket.send(json.dumps(signed_message))
+        print(signed_message)
+        logging.info(f"Sent {chat_type} message.")
 
     def handle_message(self, data):
         """Handle incoming messages."""
