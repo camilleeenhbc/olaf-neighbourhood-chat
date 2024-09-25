@@ -7,34 +7,30 @@ from cryptography.hazmat.primitives import hashes
 
 
 class Message:
-    def __init__(self, content, messageType="chat", destinationServers=None):
+    def __init__(self, content, message_type="chat", destination_servers=None):
         # assign the attributes
         self.content = content
-        self.encryptedContent = None
+        self.encrypted_content = None
         self.participants = []
         self.iv = None  # base64 encoded AES initialisation vector
-        self.symmKeys = []
-        self.signature = None
+        self.symm_keys = []
         self.counter = 0  # the nonce
-        self.messageType = messageType
-        self.destinationServers = destinationServers if destinationServers else []
-
+        self.message_type = message_type
 
     # Function to encrypt the AES key
-    def encrypt(self, receiverPublicKey, aesKey):
-        return receiverPublicKey.encrypt(
-            aesKey,
-            # Apply OAEP padding
+    def encrypt_key(self, receiver_public_key, aes_key):
+        encrypted_key = receiver_public_key.encrypt(
+            aes_key,
             padding.OAEP(
-                # SHA-256 digest/hash function used
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None,
             ),
         )
+        return base64.b64encode(encrypted_key).decode()
 
     # Decrypt the AES key
-    def decrypt(self, aesKey):
+    def decrypt_key(self, aesKey):
         return self.private_key.decrypt(
             aesKey,
             padding.OAEP(
@@ -43,50 +39,53 @@ class Message:
                 label=None,
             ),
         )
-    
-    
+
+    # Encrypt message with AES key
     # Perform AES in GCM mode
     # Key length of 32 bytes (128 bits)
-    def encryptWithAES(self, key, receiverPublicKey):
-        # IV should be 16 bytes (randomly generated)
+    def encrypt_with_aes(self, receiver_public_key):
+        # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
+        aes_key = os.urandom(32)
 
-        cipher = Cipher(algorithms.AES(key), modes.GCM(self.iv))
+        cipher = Cipher(algorithms.AES(aes_key), modes.GCM(self.iv))
         encryptor = cipher.encryptor()
-        self.encryptedContent = (
+        self.encrypted_content = (
             encryptor.update(self.content.encode()) + encryptor.finalize()
         )
-        
-        #encrypt AES key with RSA
-        encryptedAES = self.encrypt(receiverPublicKey,key )
-        
+
+        # encrypt AES key with RSA
+        encryptedAES = self.encrypt_key(receiver_public_key, aes_key)
+
         # Encode key with base64
-        self.symmKeys.append(base64.b64encode(encryptedAES).decode())
-        
+        self.symm_keys.append(encryptedAES)
+
+    # Decrypt message with AES key
     def decrypt_with_aes(self, key: bytes):
         cipher = Cipher(algorithms.AES(key), modes.GCM(self.iv))
         decryptor = cipher.decryptor()
-        decryptedContent = (
-            decryptor.update(self.encryptedContent.encode()) + decryptor.finalize()
+        decrypted_content = (
+            decryptor.update(self.encrypted_content.encode()) + decryptor.finalize()
         )
-        return decryptedContent.decode()
-    
-    def sign(self, client):
-        message = self.content.encode() + str(self.counter).encode()
-        self.signature = client.signMessage(message)
+        return decrypted_content.decode()
 
-    def formatChat(self):
-        chat = {
-            "type": "signed_data",
+    def prepare_chat_message(self, recipient_public_keys, destination_servers):
+        """Prepare an encrypted chat message, including AES key encryption."""
+
+        # Encrypt the message and generate keys
+        self.encrypt_with_aes(recipient_public_keys)
+
+        # Build the chat message structure
+        chat_message = {
             "data": {
-                "type": self.messageType,
-                "destination_servers": self.destinationServers,  # address of destination sevrer
-                "iv": base64.b64encode(self.iv).decode(),  # base64 encoded IV
-                "symm_keys": self.symmKeys,
-                # Base64 encoded AES encrypted
-                "chat": base64.b64encode(self.encryptedContent).decode(),
-            },
-            "counter": self.counter,
-            "signature": self.signature,
+                "type": self.message_type,
+                "destination_servers": destination_servers,  # Addresses of destination servers
+                "iv": base64.b64encode(self.iv).decode(),  # Base64 encoded IV
+                "symm_keys": self.symm_keys,  # Encrypted AES keys for recipients
+                "chat": base64.b64encode(
+                    self.encrypted_content
+                ).decode(),  # Base64 encoded AES-encrypted content
+            }
         }
-        return json.dumps(chat, indent=2)
+
+        return json.dumps(chat_message, indent=2)
