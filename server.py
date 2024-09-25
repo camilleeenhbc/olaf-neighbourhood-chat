@@ -102,6 +102,12 @@ class Server:
                 )
                 return
 
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except json.JSONDecodeError as e:
+                    print(f"Error converting to JSON: {e}")
+
             # Handle chats
             message_type = data.get("type", None)
             logging.info(f"{self.url} receives {message_type} message")
