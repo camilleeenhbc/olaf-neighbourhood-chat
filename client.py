@@ -90,8 +90,6 @@ class Client:
         except Exception as e:
             logging.error(f"Error in receiving message: {e}")
 
-
-
     # SEND MESSAGE
     async def send_message(
         self,
@@ -102,7 +100,7 @@ class Client:
         recipient_public_keys=[],
         participants=[],
     ):
-        
+
         if chat_type == "hello":
             chat_message = {
                 "data": {
@@ -141,7 +139,6 @@ class Client:
             logging.error("Invalid chat type specified.")
             return
 
-
         # Sign message except for public chat
         # if chat_type != "public_chat":
         chat_message_bytes = json.dumps(chat_message).encode()
@@ -152,7 +149,7 @@ class Client:
             "signature": self.sign_message(chat_message_bytes),
         }
         await websocket.send(json.dumps(signed_message))
-        print(signed_message)
+        # print(signed_message)
         logging.info(f"Sent {chat_type} message.")
 
     def handle_message(self, data):

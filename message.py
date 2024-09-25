@@ -104,5 +104,4 @@ class Message:
                 }
             }
 
-
         return json.dumps(chat_message, indent=2)
