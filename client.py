@@ -102,16 +102,14 @@ class Client:
     ):
 
         if chat_type == "hello":
-            chat_message = {
-                "data": {
-                    "type": "hello",
-                    "public_key": self.export_public_key().decode(),  # Exporting public key as PEM format
-                }
+            message_data = {
+                "type": "hello",
+                "public_key": self.export_public_key().decode(),  # Exporting public key as PEM format
             }
 
         elif chat_type == "chat":  # Private chat
             message = Message(message_content)
-            chat_message = message.prepare_chat_message(
+            message_data = message.prepare_chat_message(
                 chat_type="chat",
                 recipient_public_keys=recipient_public_keys,
                 destination_servers=destination_servers,
@@ -119,7 +117,7 @@ class Client:
 
         elif chat_type == "group_chat":  # Group chat
             message = Message(message_content)
-            chat_message = message.prepare_chat_message(
+            message_data = message.prepare_chat_message(
                 chat_type="group_chat",
                 recipient_public_keys=recipient_public_keys,
                 destination_servers=destination_servers,
@@ -127,27 +125,25 @@ class Client:
             )
 
         elif chat_type == "public_chat":  # Public chat
-            chat_message = {
-                "data": {
-                    "type": "public_chat",
-                    "sender": self.fingerprint,
-                    "message": message_content,
-                }
+            message_data = {
+                "type": "public_chat",
+                "sender": self.fingerprint,
+                "message": message_content,
             }
 
         else:
             logging.error("Invalid chat type specified.")
             return
 
-        # Sign message except for public chat
-        # if chat_type != "public_chat":
-        chat_message_bytes = json.dumps(chat_message).encode()
+        # Sign message
+        chat_message_bytes = json.dumps(message_data).encode()
         signed_message = {
             "type": "signed_data",
-            "data": chat_message,
+            "data": message_data,
             "counter": self.counter,
             "signature": self.sign_message(chat_message_bytes),
         }
+
         await websocket.send(json.dumps(signed_message))
         # print(signed_message)
         logging.info(f"Sent {chat_type} message.")
