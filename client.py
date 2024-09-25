@@ -36,6 +36,13 @@ class Client:
         )
         return hashlib.sha256(public_bytes).hexdigest()
 
+    def export_public_key(self):
+        """Export the public key to PEM format"""
+        return self.public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+
     # SIGNATURE
     # Sign the message using the RSA-PSS scheme
     # Signature should be Base64 of data + counter
@@ -87,7 +94,9 @@ class Client:
     # SEND MESSAGES
     async def send_hello(self, websocket):
         """Send the hello message with public key"""
-        hello_message = {"data": {"type": "hello", "public_key": self.fingerprint}}
+        hello_message = {
+            "data": {"type": "hello", "public_key": self.export_public_key().decode()}
+        }
         await websocket.send(json.dumps(hello_message))
         logging.info(f"Sent hello message to {self.server_url}")
 
@@ -97,10 +106,6 @@ class Client:
         """Send an encrypted chat message."""
         # Prepare the encrypted chat message with the Message class
         message = Message(message_content)
-        for public_key in recipient_public_keys:
-            print(type(public_key))
-
-
 
         # Prepare the chat message (encrypt it and structure it properly)
         chat_data = message.prepare_chat_message(
@@ -120,4 +125,3 @@ class Client:
     def handle_message(self, data):
         """Handle incoming messages."""
         logging.info(f"Handling message: {data}")
-

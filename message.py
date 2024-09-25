@@ -54,17 +54,11 @@ class Message:
             encryptor.update(self.content.encode()) + encryptor.finalize()
         )
 
-        # # encrypt AES key with RSA
-        # encryptedAES = self.encrypt_key(receiver_public_key, aes_key)
+        # encrypt AES key with RSA
+        encryptedAES = self.encrypt_key(receiver_public_key, aes_key)
 
-        # # Encode key with base64
-        # self.symm_keys.append(base64.b64encode(encryptedAES).decode())
-        
-        for public_key in receiver_public_key:
-            print(type(public_key))
-
-            encrypted_aes_key = self.encrypt_key(public_key, aes_key)
-            self.symm_keys.append(encrypted_aes_key)
+        # Encode key with base64
+        self.symm_keys.append(encryptedAES)
 
     # Decrypt message with AES key
     def decrypt_with_aes(self, key: bytes):
@@ -77,11 +71,6 @@ class Message:
 
     def prepare_chat_message(self, recipient_public_keys, destination_servers):
         """Prepare an encrypted chat message, including AES key encryption."""
-
-        for public_key in recipient_public_keys:
-            print(type(public_key))
-
-
 
         # Encrypt the message and generate keys
         self.encrypt_with_aes(recipient_public_keys)
