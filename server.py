@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from neighbourhood import Neighbourhood
 
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
+logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
 
 class Server:
@@ -22,10 +22,7 @@ class Server:
         self.neighbourhood = Neighbourhood(self.url)
 
         # TODO: Change to real list of client RSAs
-        self.clients = [
-            f"RSA1-{port}",
-            f"RSA2-{port}",
-        ]  # List of clients connecting to this server
+        self.clients = []  # List of clients connecting to this server
 
     def add_neighbour_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
@@ -94,6 +91,8 @@ class Server:
             await self.send_client_list(websocket)
         elif message_type == "client_update_request":
             await self.send_client_update(websocket)
+        elif message_type == "client_update":
+            self.receive_client_update(websocket, message)
         elif message_type == "signed_data":
             # TODO: Handle counter and signature
             counter = message.get("counter", None)
@@ -211,9 +210,15 @@ class Server:
 
         # Receive client_update response from other servers
         for websocket, message in responses.items():
-            clients = message["clients"]
+            self.receive_client_update(websocket, message)
+
+    def receive_client_update(self, websocket, message):
+        clients = message["clients"]
+        if isinstance(websocket, websocket_server.ServerConnection):
+            neighbour_url = self.neighbour_websockets[websocket]
+        else:
             neighbour_url = self.neighbourhood.active_servers[websocket]
-            logging.info(
-                f"{self.url} receives client update from {neighbour_url}: {clients}"
-            )
-            self.neighbourhood.save_clients(neighbour_url, clients)
+        logging.info(
+            f"{self.url} receives client update from {neighbour_url}: {clients}"
+        )
+        self.neighbourhood.save_clients(neighbour_url, clients)
