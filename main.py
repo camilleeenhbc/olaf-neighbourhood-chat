@@ -19,8 +19,8 @@ async def main():
         server = Server(port=int(server_port))
         server.add_neighbour_servers(neighbours)
         task = asyncio.create_task(server.start())
-    except:
-        print(f"Server localhost:{server_port} exists")
+    except Exception as e:
+        print(f"Error: {e}")
 
     # Client connects to server
     client = Client(f"localhost:{server_port}")

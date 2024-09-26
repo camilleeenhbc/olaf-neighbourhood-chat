@@ -147,7 +147,9 @@ class Server:
         pass
 
     async def receive_hello(self, message):
+        """Save client's public key and send client update to other servers"""
         client_public_key = message["public_key"]
+        logging.info(f"{self.url} receives hello from client: {client_public_key}")
         self.clients.append(client_public_key)
         await self.send_client_update()
 
