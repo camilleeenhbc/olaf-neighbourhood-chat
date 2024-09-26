@@ -94,8 +94,6 @@ class Server:
             await self.send_client_list(websocket)
         elif message_type == "client_update_request":
             await self.send_client_update(websocket)
-        elif message_type == "client_update":
-            await self.receive_client_update(websocket, message)
         elif message_type == "signed_data":
             # TODO: Handle counter and signature
             counter = message.get("counter", None)
@@ -207,11 +205,13 @@ class Server:
         request = {
             "type": "client_update_request",
         }
-        await self.neighbourhood.broadcast_request(request)
+        responses = await self.neighbourhood.broadcast_request(request, True)
 
-    async def receive_client_update(self, websocket, message):
-        """Save the clients inside the neighbourhood"""
-        clients = message["clients"]
-        server_url = self.neighbour_websockets[websocket]
-        self.neighbourhood.save_clients(server_url, clients)
-        logging.info(f"{self.url} receives client update from {server_url}: {clients}")
+        # Receive client_update response from other servers
+        for websocket, message in responses.items():
+            clients = message["clients"]
+            neighbour_url = self.neighbourhood.active_servers[websocket]
+            logging.info(
+                f"{self.url} receives client update from {neighbour_url}: {clients}"
+            )
+            self.neighbourhood.save_clients(neighbour_url, clients)

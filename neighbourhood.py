@@ -1,6 +1,5 @@
 import json
 import logging
-import asyncio
 from websockets import WebSocketClientProtocol
 from typing import List
 
@@ -38,28 +37,27 @@ class Neighbourhood:
         wait_for_response: bool = False,
     ):
         """Send request to a specific websocket"""
+        response = None
         try:
             await receiver_websocket.send(json.dumps(message))
             if wait_for_response is True:
-                message = await receiver_websocket.recv()
-                logging.info(f"{self.server_url} receives: {message}")
-                return message
+                response = await receiver_websocket.recv()
+                response = json.loads(response)
+                logging.info(f"{self.server_url} receives: {response}")
+
         except Exception as e:
             logging.error(f"{self.server_url} failed to send request: {message} {e}")
 
+        return response
+
     async def broadcast_request(self, message, wait_for_response: bool = False):
         """Broadcast the specified request to all active servers"""
-        tasks = []
+        responses = {}
         for websocket in self.active_servers.keys():
-            tasks.append(
-                asyncio.create_task(
-                    self.send_request(websocket, message, wait_for_response)
-                )
-            )
+            response = await self.send_request(websocket, message, wait_for_response)
+            responses[websocket] = response
 
-        responses = await asyncio.gather(*tasks)
-        if wait_for_response is True:
-            return responses
+        return responses
 
     async def send_server_hello(self, websocket: WebSocketClientProtocol):
         logging.info(f"{self.server_url} sends server_hello")
