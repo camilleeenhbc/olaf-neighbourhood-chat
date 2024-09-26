@@ -140,7 +140,7 @@ class Server:
 
     async def receive_server_hello(self, websocket, data):
         neighbour_url = data["sender"]
-        self.neighbour_websockets[neighbour_url] = websocket
+        self.neighbour_websockets[websocket] = neighbour_url
 
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
@@ -183,7 +183,6 @@ class Server:
         when a client sends `hello` or disconnects.
         Otherwise, send to the specified websocket
         """
-        logging.info(f"{self.url} sends client update to all servers")
 
         response = {
             "type": "client_update",
@@ -191,8 +190,11 @@ class Server:
         }
 
         if websocket is None:
+            logging.info(f"{self.url} sends client update to all servers")
             await self.neighbourhood.broadcast_request(response)
         else:
+            neighbour_url = self.neighbour_websockets[websocket]
+            logging.info(f"{self.url} sends client update to {neighbour_url}")
             await self.send_response(websocket, response)
 
     async def request_client_update(self):
