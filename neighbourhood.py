@@ -3,7 +3,7 @@ import logging
 from websockets import WebSocketClientProtocol
 from typing import List
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
 
 class Neighbourhood:

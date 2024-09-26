@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from neighbourhood import Neighbourhood
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
 
 class Server:
@@ -149,7 +149,7 @@ class Server:
     async def receive_hello(self, message):
         """Save client's public key and send client update to other servers"""
         client_public_key = message["public_key"]
-        logging.info(f"{self.url} receives hello from client: {client_public_key}")
+        logging.info(f"{self.url} receives hello from client:\n{client_public_key}")
         self.clients.append(client_public_key)
         await self.send_client_update()
 
