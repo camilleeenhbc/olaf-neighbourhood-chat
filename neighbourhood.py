@@ -3,7 +3,7 @@ import logging
 from websockets import WebSocketClientProtocol
 from typing import List
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
 
 class Neighbourhood:
@@ -43,10 +43,9 @@ class Neighbourhood:
             if wait_for_response is True:
                 response = await receiver_websocket.recv()
                 response = json.loads(response)
-                logging.info(f"{self.server_url} receives: {response}")
 
         except Exception as e:
-            logging.error(f"{self.server_url} failed to send request: {message} {e}")
+            logging.error(f"{self.server_url} failed to send request: {e}")
 
         return response
 

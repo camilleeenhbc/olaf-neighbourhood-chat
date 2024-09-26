@@ -1,5 +1,7 @@
 import logging
+import sys
 import json
+import asyncio
 import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
@@ -13,7 +15,7 @@ from cryptography.exceptions import InvalidSignature
 
 from neighbourhood import Neighbourhood
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
 
 class Server:
@@ -30,10 +32,7 @@ class Server:
 
  # maybe change client to dict?? stores # Fingerprint: {websocket, counter}
         # TODO: Change to real list of client RSAs
-        self.clients = [
-            f"RSA1-{port}",
-            f"RSA2-{port}",
-        ]  # List of clients connecting to this server
+        self.clients = []  # List of clients connecting to this server
 
     def add_neighbour_servers(self, server_urls: List[str]):
         self.neighbour_servers += server_urls
@@ -102,6 +101,8 @@ class Server:
             await self.send_client_list(websocket)
         elif message_type == "client_update_request":
             await self.send_client_update(websocket)
+        elif message_type == "client_update":
+            self.receive_client_update(websocket, message)
         elif message_type == "signed_data":
             # TODO: Handle counter and signature
             counter = message.get("counter", None)
@@ -152,10 +153,13 @@ class Server:
         await self.connect_to_neighbour(neighbour_url)
 
     async def receive_chat(self, message):
+        logging.info(f"{self.url} receives chat from client:\n{message}")
         pass
 
     async def receive_hello(self, message):
+        """Save client's public key and send client update to other servers"""
         client_public_key = message["public_key"]
+        logging.info(f"{self.url} receives hello from client")
         self.clients.append(client_public_key)
         await self.send_client_update()
 
@@ -256,9 +260,27 @@ class Server:
 
         # Receive client_update response from other servers
         for websocket, message in responses.items():
-            clients = message["clients"]
+            self.receive_client_update(websocket, message)
+
+    def receive_client_update(self, websocket, message):
+        clients = message["clients"]
+        if isinstance(websocket, websocket_server.ServerConnection):
+            neighbour_url = self.neighbour_websockets[websocket]
+        else:
             neighbour_url = self.neighbourhood.active_servers[websocket]
-            logging.info(
-                f"{self.url} receives client update from {neighbour_url}: {clients}"
-            )
-            self.neighbourhood.save_clients(neighbour_url, clients)
+        logging.info(f"{self.url} receives client update from {neighbour_url}")
+        self.neighbourhood.save_clients(neighbour_url, clients)
+
+if __name__ == "__main__":
+    # Arguments: server_port num_neighbours neighbour1_url neighbour2_url ...
+    # Example: 8080 2 localhost:8081 localhost:8081
+    server_port = int(sys.argv[1])
+    num_neighbours = int(sys.argv[2])
+    neighbours = []
+    for i in range(num_neighbours):
+        neighbours.append(sys.argv[3 + i])
+
+    # Start server
+    server = Server(port=int(server_port))
+    server.add_neighbour_servers(neighbours)
+    asyncio.run(server.start())
