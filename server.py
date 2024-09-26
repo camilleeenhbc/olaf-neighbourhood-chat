@@ -4,6 +4,13 @@ import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
 
+import base64
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.exceptions import InvalidSignature
+
+
 from neighbourhood import Neighbourhood
 
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +28,7 @@ class Server:
         self.neighbour_websockets = {}  # Websocket (ServerConnection): Neighbour URL
         self.neighbourhood = Neighbourhood(self.url)
 
+ # maybe change client to dict?? stores # Fingerprint: {websocket, counter}
         # TODO: Change to real list of client RSAs
         self.clients = [
             f"RSA1-{port}",
@@ -151,8 +159,47 @@ class Server:
         self.clients.append(client_public_key)
         await self.send_client_update()
 
+    # check that a message is valid
+    def check_public_chat(self, message):
+        if message.get("type") != "signed_data":
+            return False
+
+        # check fingerprint exists
+        fingerprint = message["data"].get("sender")
+        if not fingerprint:
+            return False
+        
+        # check client exists
+        client = self.clients.get(fingerprint)
+        if not client:
+            return False
+    
+        return True
+    
+    # broadcast message to client
+    async def broadcast_to_clients(self, websocket: websocket_server.ServerConnection, message):
+        try:
+            await websocket.send(message)
+            logging.info(f"{self.url} broadcasted public message to clients")
+        except Exception as e:
+            logging.error(f"{self.url} public message failed to broadcast to clients: {e}")
+
+    # receive public chats and braodcast to connected clients and other neighbourhoods if valid message
     async def receive_public_chat(self, message):
-        pass
+        logging.info(f"{self.url} recieved public chat message")
+
+        # if invalid then do not broadcast and return
+        if not self.check_public_chat(message):
+            logging.error(f"{self.url} invalid public chat message")
+            return
+        
+        # send to clients in the server
+        for client in self.clients.values():
+            await self.broadcast_to_clients(client["websocket"])
+        # request neighborhoods broadcast message
+        if self.neighbourhood:
+            await self.neighbourhood.broadcast_request(message)
+
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
