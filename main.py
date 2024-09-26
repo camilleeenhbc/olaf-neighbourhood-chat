@@ -14,16 +14,20 @@ async def main():
         neighbours.append(sys.argv[3 + i])
 
     # Start server
+    task = None
     try:
         server = Server(port=int(server_port))
         server.add_neighbour_servers(neighbours)
-        await server.start()
+        task = asyncio.create_task(server.start())
     except:
         print(f"Server localhost:{server_port} exists")
 
     # Client connects to server
     client = Client(f"localhost:{server_port}")
     await client.connect_to_server()
+
+    if task:
+        await task
 
 
 if __name__ == "__main__":
