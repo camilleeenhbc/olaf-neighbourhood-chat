@@ -31,18 +31,24 @@ class Server:
         self.neighbour_servers += server_urls
 
     async def connect_to_neighbourhood(self):
+        """Create client connections for every neighbour servers"""
         for neighbour_url in self.neighbour_servers:
-            if neighbour_url in self.neighbourhood.active_servers:
-                continue
+            await self.connect_to_neighbour(neighbour_url)
 
-            try:
-                websocket = await websockets.connect(f"ws://{neighbour_url}")
-                await self.neighbourhood.add_active_server(neighbour_url, websocket)
-                logging.debug(f"{self.url} connect to neighbour {neighbour_url}")
-            except Exception as e:
-                logging.error(
-                    f"{self.url} failed to connect to neighbour {neighbour_url}"
-                )
+    async def connect_to_neighbour(self, neighbour_url):
+        """
+        Create a client connection to the neighbour server to send requests
+        if the neighbour server hasn't already in the list of active servers
+        """
+        if neighbour_url in self.neighbourhood.active_servers.values():
+            return
+
+        try:
+            websocket = await websockets.connect(f"ws://{neighbour_url}")
+            await self.neighbourhood.add_active_server(neighbour_url, websocket)
+            logging.debug(f"{self.url} connect to neighbour {neighbour_url}")
+        except Exception as e:
+            logging.error(f"{self.url} failed to connect to neighbour {neighbour_url}")
 
     async def start(self):
         """
@@ -135,6 +141,9 @@ class Server:
     async def receive_server_hello(self, websocket, data):
         neighbour_url = data["sender"]
         self.neighbour_websockets[neighbour_url] = websocket
+
+        # Connect to neighbour in case the neighbour server starts after this server
+        await self.connect_to_neighbour(neighbour_url)
 
     async def receive_chat(self, message):
         pass

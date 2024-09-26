@@ -15,7 +15,7 @@ class Neighbourhood:
         # Format: {server_url1: ["RSA1", "RSA2"], server_url2: ["RSA3"]}
         self.clients_across_servers = {}
 
-        # Format: neighbour url: Websocket (ClientProtocol)
+        # Format: Websocket (ClientProtocol): neighbour URL
         self.active_servers = {}
 
     async def add_active_server(
