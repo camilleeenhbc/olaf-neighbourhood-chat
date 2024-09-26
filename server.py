@@ -1,5 +1,7 @@
 import logging
+import sys
 import json
+import asyncio
 import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
@@ -143,12 +145,13 @@ class Server:
         await self.connect_to_neighbour(neighbour_url)
 
     async def receive_chat(self, message):
+        logging.info(f"{self.url} receives chat from client:\n{message}")
         pass
 
     async def receive_hello(self, message):
         """Save client's public key and send client update to other servers"""
         client_public_key = message["public_key"]
-        logging.info(f"{self.url} receives hello from client:\n{client_public_key}")
+        logging.info(f"{self.url} receives hello from client")
         self.clients.append(client_public_key)
         await self.send_client_update()
 
@@ -218,7 +221,19 @@ class Server:
             neighbour_url = self.neighbour_websockets[websocket]
         else:
             neighbour_url = self.neighbourhood.active_servers[websocket]
-        logging.info(
-            f"{self.url} receives client update from {neighbour_url}: {clients}"
-        )
+        logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
+
+if __name__ == "__main__":
+    # Arguments: server_port num_neighbours neighbour1_url neighbour2_url ...
+    # Example: 8080 2 localhost:8081 localhost:8081
+    server_port = int(sys.argv[1])
+    num_neighbours = int(sys.argv[2])
+    neighbours = []
+    for i in range(num_neighbours):
+        neighbours.append(sys.argv[3 + i])
+
+    # Start server
+    server = Server(port=int(server_port))
+    server.add_neighbour_servers(neighbours)
+    asyncio.run(server.start())
