@@ -26,6 +26,7 @@ class Client:
         )
         self.public_key = self.private_key.public_key()
         self.fingerprint = self.generate_fingerprint(self.public_key)
+        self.websocket = None
 
     def generate_fingerprint(self, public_key):
         """Generates a fingerprint based on the public key (hash)."""
@@ -73,10 +74,12 @@ class Client:
     # CONNECT TO SERVER
     async def connect_to_server(self):
         try:
-            async with connect(f"ws://{self.server_url}") as websocket:
-                logging.info(f"Connected to {self.server_url}")
-                await self.send_hello(websocket)
-                await self.listen(websocket)
+            self.websocket = await connect(f"ws://{self.server_url}")
+            await self.send_message(self.websocket, chat_type="hello")
+            # async with connect(f"ws://{self.server_url}") as websocket:
+            #     logging.info(f"Connected to {self.server_url}")
+            #     await self.send_message(websocket, chat_type="hello")
+                # await self.listen(websocket)
         except Exception as e:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
 
@@ -147,6 +150,16 @@ class Client:
         await websocket.send(json.dumps(signed_message))
         # print(signed_message)
         logging.info(f"Sent {chat_type} message.")
+
+    async def request_client_list(self):
+        request = {
+            "type": "client_list_request",
+        }
+
+        await self.websocket.send(json.dumps(request))
+        response = await self.websocket.recv()
+        response = json.loads(response)
+        return response
 
     def handle_message(self, data):
         """Handle incoming messages."""
