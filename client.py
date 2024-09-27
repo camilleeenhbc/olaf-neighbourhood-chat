@@ -38,6 +38,25 @@ class Client:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         return hashlib.sha256(public_bytes).hexdigest()
+    
+
+    def get_public_key_from_fingerprint(self, fingerprint):
+        """
+        Retrieve a public key using the sender's fingerprint from the online users list.
+        """
+        self.request_client_list() # Fetch online users
+        for server, clients in self.online_users.items():
+            for client in clients:
+                print(client)
+                # Assuming the client entry contains the public key in PEM format
+                public_key_pem = client
+                public_key = serialization.load_pem_public_key(
+                    public_key_pem.encode(), backend=default_backend()
+                )
+                client_fingerprint = self.generate_fingerprint(public_key)
+                if client_fingerprint == fingerprint:
+                    return public_key
+        return None
 
     def export_public_key(self):
         """Export the public key to PEM format"""
@@ -60,26 +79,31 @@ class Client:
         self.signature = base64.b64encode(signature).decode()
         return self.signature
 
-    def verify_signature(self, public_key):
+    def verify_signature(self, public_key, signature, message_data):
         try:
+            # Verify signature using sender's public key and the original message data
             public_key.verify(
-                base64.b64decode(self.signature),
-                (self.content + str(self.counter)).encode(),
+                base64.b64decode(signature),  
+                message_data.encode(), 
                 padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256), salt_length=padding.PSS.MAX_LENGTH
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
                 ),
-                hashes.SHA256(),
+                hashes.SHA256()
             )
             return True
         except InvalidSignature:
+            logging.error("Invalid signature.")
             return False
 
     # CONNECT TO SERVER
     async def connect_to_server(self):
+        """ Create connection to server """
         try:
             self.websocket = await connect(f"ws://{self.server_url}")
             logging.info(f"Connected to {self.server_url}")
             await self.send_message(self.websocket, chat_type="hello")
+            await self.request_client_list() # fetch online users
             await self.listen(self.websocket)
         except websockets.ConnectionClosed:
             logging.info("Disconnected")
@@ -87,6 +111,7 @@ class Client:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
 
     async def disconnect(self):
+        """Disconnect client from server"""
         logging.info("Disconnecting")
         await self.websocket.close()
 
@@ -96,7 +121,7 @@ class Client:
             async for message in websocket:
                 # logging.info(f"Received message from server: {message}")
                 data = json.loads(message)
-                self.handle_message(data)
+                await self.receive_message(data)
         except Exception as e:
             logging.error(f"Error in receiving message: {e}")
 
@@ -110,6 +135,10 @@ class Client:
         recipient_public_keys=[],
         participants=[],
     ):
+        
+        """
+        Send different types of messages
+        """
 
         if chat_type == "hello":
             message_data = {
@@ -165,12 +194,14 @@ class Client:
 
         await self.websocket.send(json.dumps(request))
 
-    def handle_message(self, data):
+    async def receive_message(self, data):
         """Handle incoming messages."""
         message_type = data.get("type", None)
 
         if message_type == "client_list":
             self.handle_client_list(data)
+        elif message_type == "signed_data":
+            await self.handle_signed_data(data)
         else:
             logging.error(f"Invalid message: {data}")
 
@@ -178,6 +209,7 @@ class Client:
         logging.info("Client receives client_list")
 
         servers = data.get("servers", None)
+        # print(servers)
         if servers is None:
             logging.error("Invalid client_list format")
             return
@@ -191,3 +223,24 @@ class Client:
                 log += f"- {i}@{server_address}\n"
 
         logging.info(log)
+        
+    async def handle_signed_data(self, data):
+        """Handle and verify signed messages"""
+        message_data = data.get("data", {})
+        signature = data.get("signature", "")
+        counter = data.get("counter", 0)
+
+        message_type = message_data.get("type", None)
+        
+        if message_type == "public_chat":
+            sender_fingerprint = message_data.get("sender")
+            # Get public keys from online users
+            sender_public_key = self.get_public_key_from_fingerprint(sender_fingerprint)
+            self.verify_signature(sender_public_key, signature, json.dumps(message_data))
+            await self.handle_public_chat(message_data)
+        
+
+    async def handle_public_chat(self, message):
+        sender = message.get("sender", "Unknown")
+        public_message = message.get("message", "")
+        logging.info(f"Received public chat from {sender}: {public_message}")
