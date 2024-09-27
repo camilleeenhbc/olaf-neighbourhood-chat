@@ -28,7 +28,6 @@ class Server:
         self.neighbour_websockets = {}  # Websocket (ServerConnection): Neighbour URL
         self.neighbourhood = Neighbourhood(self.url)
 
-        # maybe change client to dict?? stores # Fingerprint: {websocket, counter}
         # {websocket: {public_key, fingerprint, counter}}
         self.clients = {}  # List of clients connecting to this server
 
@@ -72,8 +71,10 @@ class Server:
     async def stop(self):
         logging.info(f"Closing {self.url}")
         self.clients = {}
-        await self.request_client_update()
+        await self.send_client_update()
+
         self._websocket_server.close()
+        await self._websocket_server.wait_closed()
 
     async def listen(self, websocket):
         """
@@ -305,4 +306,11 @@ if __name__ == "__main__":
     # Start server
     server = Server(server_url)
     server.add_neighbour_servers(neighbours)
-    asyncio.run(server.start())
+
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(server.start())
+    except:
+        loop.run_until_complete(server.stop())
+    finally:
+        loop.close()

@@ -94,6 +94,6 @@ loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
 except:
-    loop.run_until_complete(asyncio.ensure_future(client.disconnect()))
+    loop.run_until_complete(client.disconnect())
 finally:
     loop.close()
