@@ -122,6 +122,8 @@ class Server:
                 except json.JSONDecodeError as e:
                     print(f"Error converting to JSON: {e}")
 
+            message["data"] = data
+
             # Handle chats
             message_type = data.get("type", None)
             logging.info(f"{self.url} receives {message_type} message")
@@ -164,8 +166,25 @@ class Server:
         await self.connect_to_neighbour(neighbour_url)
 
     async def receive_chat(self, websocket, message):
-        logging.info(f"{self.url} receives chat from client:\n{message}")
-        pass
+        logging.info(f"{self.url} receives chat from client")
+        destination_servers = message["data"].get("destination_servers", None)
+        if destination_servers is None:
+            logging.error(f"{self.url} receives invalid chat message: {message}")
+
+        if self.url in destination_servers:
+            # TODO: Handle chat message while in the destination server
+            logging.info(
+                f"{self.url} receives chat as the destination server:\n{message}"
+            )
+            return
+
+        for server_url in destination_servers:
+            websocket = self.neighbourhood.find_active_server(server_url)
+            if websocket is None:
+                logging.error(f"{self.url} cannot find destination server {server_url}")
+                return
+
+            await self.neighbourhood.send_request(websocket, message)
 
     async def receive_hello(self, websocket, message):
         """Save client's public key and send client update to other servers"""
