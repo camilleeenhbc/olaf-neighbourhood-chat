@@ -38,16 +38,14 @@ class Client:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         return hashlib.sha256(public_bytes).hexdigest()
-    
 
-    def get_public_key_from_fingerprint(self, fingerprint):
+    async def get_public_key_from_fingerprint(self, fingerprint):
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
-        self.request_client_list() # Fetch online users
+        await self.request_client_list()  # Fetch online users
         for server, clients in self.online_users.items():
             for client in clients:
-                print(client)
                 # Assuming the client entry contains the public key in PEM format
                 public_key_pem = client
                 public_key = serialization.load_pem_public_key(
@@ -83,13 +81,13 @@ class Client:
         try:
             # Verify signature using sender's public key and the original message data
             public_key.verify(
-                base64.b64decode(signature),  
-                message_data.encode(), 
+                base64.b64decode(signature),
+                message_data.encode(),
                 padding.PSS(
                     mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
+                    salt_length=padding.PSS.MAX_LENGTH,
                 ),
-                hashes.SHA256()
+                hashes.SHA256(),
             )
             return True
         except InvalidSignature:
@@ -98,12 +96,12 @@ class Client:
 
     # CONNECT TO SERVER
     async def connect_to_server(self):
-        """ Create connection to server """
+        """Create connection to server"""
         try:
             self.websocket = await connect(f"ws://{self.server_url}")
             logging.info(f"Connected to {self.server_url}")
             await self.send_message(self.websocket, chat_type="hello")
-            await self.request_client_list() # fetch online users
+            await self.request_client_list()  # fetch online users
             await self.listen(self.websocket)
         except websockets.ConnectionClosed:
             logging.info("Disconnected")
@@ -135,7 +133,6 @@ class Client:
         recipient_public_keys=[],
         participants=[],
     ):
-        
         """
         Send different types of messages
         """
@@ -149,15 +146,6 @@ class Client:
         elif chat_type == "chat":  # Private chat
             message = Message(message_content)
             message_data = message.prepare_chat_message(
-                chat_type="chat",
-                recipient_public_keys=recipient_public_keys,
-                destination_servers=destination_servers,
-            )
-
-        elif chat_type == "group_chat":  # Group chat
-            message = Message(message_content)
-            message_data = message.prepare_chat_message(
-                chat_type="group_chat",
                 recipient_public_keys=recipient_public_keys,
                 destination_servers=destination_servers,
                 participants=participants,
@@ -223,7 +211,7 @@ class Client:
                 log += f"- {i}@{server_address}\n"
 
         logging.info(log)
-        
+
     async def handle_signed_data(self, data):
         """Handle and verify signed messages"""
         message_data = data.get("data", {})
@@ -231,14 +219,17 @@ class Client:
         counter = data.get("counter", 0)
 
         message_type = message_data.get("type", None)
-        
+
         if message_type == "public_chat":
             sender_fingerprint = message_data.get("sender")
             # Get public keys from online users
-            sender_public_key = self.get_public_key_from_fingerprint(sender_fingerprint)
-            self.verify_signature(sender_public_key, signature, json.dumps(message_data))
+            sender_public_key = await self.get_public_key_from_fingerprint(
+                sender_fingerprint
+            )
+            self.verify_signature(
+                sender_public_key, signature, json.dumps(message_data)
+            )
             await self.handle_public_chat(message_data)
-        
 
     async def handle_public_chat(self, message):
         sender = message.get("sender", "Unknown")
