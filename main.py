@@ -37,7 +37,7 @@ async def handle_online_users(client: Client):
 
 async def handle_chat(client: Client):
     # Choose chat participant
-    target_chat = input("Choose participant: ")
+    target_chat = await asyncio.to_thread(input, "Choose participant: ")
     try:
         index, address = target_chat.split("@")
         index = int(index)
@@ -51,7 +51,7 @@ async def handle_chat(client: Client):
     )
 
     # Compose message
-    message = input(f"Compose message to {target_chat}: ")
+    message = await asyncio.to_thread(input, f"Compose message to {target_chat}: ")
 
     # Chat
     await client.send_message(
@@ -65,7 +65,7 @@ async def handle_chat(client: Client):
 
 async def handle_public_chat(client: Client):
     # Compose message
-    message = input("Compose message for public chat: ")
+    message = await asyncio.to_thread(input, "Compose message for public chat: ")
 
     # Send public chat
     await client.send_message(
