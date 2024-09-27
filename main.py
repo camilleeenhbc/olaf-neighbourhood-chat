@@ -1,8 +1,6 @@
 import sys
 import asyncio
 import logging
-from threading import Thread
-from server import Server
 from client import Client
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
@@ -19,7 +17,7 @@ async def get_client_inputs(client: Client):
     print("public: Chat with the public")
     print("\n\n")
 
-    choice = input()
+    choice = await asyncio.to_thread(input)
     while choice != "q":
         if choice == "users":
             await handle_online_users(client)
@@ -28,7 +26,9 @@ async def get_client_inputs(client: Client):
         elif choice == "public":
             await handle_public_chat(client)
 
-        choice = input()
+        choice = await asyncio.to_thread(input)
+
+    await client.disconnect()
 
 
 async def handle_online_users(client: Client):
@@ -75,16 +75,25 @@ async def handle_public_chat(client: Client):
     )
 
 
-async def main():
-    # Arguments: server_url
-    server_url = sys.argv[1]
-
-    # Client connects to server
-    client = Client(server_url)
-    t = Thread(target=asyncio.run, args=(client.connect_to_server(),))
-    t.start()
-
-    await get_client_inputs(client)
+async def main(client: Client):
+    await asyncio.wait(
+        [
+            asyncio.create_task(client.connect_to_server()),
+            asyncio.create_task(get_client_inputs(client)),
+        ]
+    )
 
 
-asyncio.run(main())
+# Arguments: server_url
+server_url = sys.argv[1]
+
+# Client connects to server
+client = Client(server_url)
+
+loop = asyncio.get_event_loop()
+try:
+    loop.run_until_complete(main(client))
+except:
+    loop.run_until_complete(asyncio.ensure_future(client.disconnect()))
+finally:
+    loop.close()

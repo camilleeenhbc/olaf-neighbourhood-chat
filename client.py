@@ -12,7 +12,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
 from message import Message
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
 
 class Client:
@@ -77,15 +77,18 @@ class Client:
     # CONNECT TO SERVER
     async def connect_to_server(self):
         try:
-            # self.websocket = await connect(f"ws://{self.server_url}")
-            # await self.send_message(self.websocket, chat_type="hello")
-            async with connect(f"ws://{self.server_url}") as websocket:
-                self.websocket = websocket
-                logging.info(f"Connected to {self.server_url}")
-                await self.send_message(websocket, chat_type="hello")
-                await self.listen(websocket)
+            self.websocket = await connect(f"ws://{self.server_url}")
+            logging.info(f"Connected to {self.server_url}")
+            await self.send_message(self.websocket, chat_type="hello")
+            await self.listen(self.websocket)
+        except websockets.ConnectionClosed:
+            logging.info("Disconnected")
         except Exception as e:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
+
+    async def disconnect(self):
+        logging.info("Disconnecting")
+        await self.websocket.close()
 
     async def listen(self, websocket):
         """Listen for incoming messages"""
