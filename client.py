@@ -182,8 +182,9 @@ class Client:
 
         await self.websocket.send(json.dumps(request))
 
+    # HANDLE INCOMING MESSAGES
     async def receive_message(self, data):
-        """Handle incoming messages."""
+        """Handle incoming messages from other servers and clients."""
         message_type = data.get("type", None)
 
         if message_type == "client_list":
@@ -213,25 +214,50 @@ class Client:
         logging.info(log)
 
     async def handle_signed_data(self, data):
-        """Handle and verify signed messages"""
+        """Handle and verify signed_data messages"""
         message_data = data.get("data", {})
         signature = data.get("signature", "")
         counter = data.get("counter", 0)
 
         message_type = message_data.get("type", None)
-
         if message_type == "public_chat":
-            sender_fingerprint = message_data.get("sender")
-            # Get public keys from online users
-            sender_public_key = await self.get_public_key_from_fingerprint(
-                sender_fingerprint
-            )
-            self.verify_signature(
-                sender_public_key, signature, json.dumps(message_data)
-            )
-            await self.handle_public_chat(message_data)
+            await self.handle_public_chat(signature, message_data)
+        elif message_type == "chat":
+            await self.handle_chat(signature, message_data)
+        else:
+            logging.error("Invalid message type")
 
-    async def handle_public_chat(self, message):
-        sender = message.get("sender", "Unknown")
-        public_message = message.get("message", "")
-        logging.info(f"Received public chat from {sender}: {public_message}")
+    async def handle_public_chat(self, signature, message):
+        """
+        Handles incoming public chat messages and verifies the sender's signature.
+        """
+        try:
+            sender = message.get("sender")
+            # Get public keys from online users
+            sender_public_key = await self.get_public_key_from_fingerprint(sender)
+            if self.verify_signature(sender_public_key, signature, json.dumps(message)):
+                public_message = message.get("message", "")
+                logging.info(f"Received public chat from {sender}: {public_message}")
+            else:
+                logging.error(f"Signature verification failed for sender: {sender}")
+        except Exception as e:
+            logging.error(f"Error processing public chat message: {e}")
+
+    async def handle_chat(self, signature, message):
+        """
+        Handles incoming chat messages, verifies the sender's signature,
+        and logs the message if the signature is valid.
+        """
+        try:
+            chat = message.get("chat", {})
+            participants = chat.get("participants", [])
+            sender = participants[0]  # sender's fingerprint comes first
+            sender_public_key = await self.get_public_key_from_fingerprint(sender)
+
+            if self.verify_signature(sender_public_key, signature, json.dumps(message)):
+                public_message = chat.get("message", "")
+                logging.info(f"Received chat message: {public_message}")
+            else:
+                logging.error(f"Signature verification failed for sender: {sender}")
+        except Exception as e:
+            logging.error(f"Error processing chat message: {e}")
