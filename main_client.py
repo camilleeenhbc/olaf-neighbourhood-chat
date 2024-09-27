@@ -54,16 +54,6 @@ async def run_client2(client1_public_key_pem):
             recipient_public_keys=[client1_public_key],  # Encrypt for Client1
         )
 
-        # # Send a group chat message including Client1 and Client2
-        await client2.send_message(
-            websocket,
-            "Hello, group!",
-            chat_type="group_chat",
-            destination_servers=["server1.example.com", "server2.example.com"],
-            recipient_public_keys=[client1_public_key],  # Encrypt for group
-            participants=[client2.fingerprint, client1_public_key_pem],
-        )
-
         # Send a public chat message
         await client2.send_message(
             websocket,
