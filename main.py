@@ -15,6 +15,7 @@ async def get_client_inputs(client: Client):
     print("INSTRUCTION")
     print("q: Quit")
     print("chat: Chat with a person")
+    print("public: Chat with the public")
     print("\n\n")
     choice = input("Choice: ")
     while choice != "q":
@@ -38,6 +39,10 @@ async def handle_chat(client: Client):
         for i in range(len(clients)):
             client_list[server_address] = clients
             print(f"- {i}@{server_address}")
+
+    if len(client_list) == 0:
+        print("No client")
+        return
 
     # Choose chat participant
     target_chat = input("Choose participant: ")

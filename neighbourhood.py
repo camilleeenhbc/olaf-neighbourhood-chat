@@ -24,8 +24,11 @@ class Neighbourhood:
         self.active_servers[websocket] = server_url
         await self.send_server_hello(websocket)
 
-    def remove_active_server(self, websocket: WebSocketClientProtocol):
-        self.active_servers.pop(websocket)
+    def remove_active_server(self, server_url: str):
+        for websocket, url in self.active_servers.items():
+            if url == server_url:
+                self.active_servers.pop(websocket)
+                return
 
     def save_clients(self, server_url: str, client_list: List[str]):
         self.clients_across_servers[server_url] = client_list
