@@ -14,42 +14,34 @@ from cryptography.hazmat.backends import default_backend
 async def get_client_inputs(client: Client):
     print("INSTRUCTION")
     print("q: Quit")
+    print("users: Retrieve list of online users")
     print("chat: Chat with a person")
     print("public: Chat with the public")
     print("\n\n")
-    choice = input("Choice: ")
+
+    choice = input()
     while choice != "q":
-        if choice == "chat":
+        if choice == "users":
+            await handle_online_users(client)
+        elif choice == "chat":
             await handle_chat(client)
         elif choice == "public":
             await handle_public_chat(client)
 
-        choice = input("Choice: ")
+        choice = input()
+
+
+async def handle_online_users(client: Client):
+    await client.request_client_list()
 
 
 async def handle_chat(client: Client):
-    # Get client list
-    response = await client.request_client_list()
-    server_list = response["servers"]
-    print("List of clients: ")
-
-    client_list = {}
-    for item in server_list:
-        server_address, clients = item["address"], item["clients"]
-        for i in range(len(clients)):
-            client_list[server_address] = clients
-            print(f"- {i}@{server_address}")
-
-    if len(client_list) == 0:
-        print("No client")
-        return
-
     # Choose chat participant
     target_chat = input("Choose participant: ")
     try:
         index, address = target_chat.split("@")
         index = int(index)
-        public_key_str = client_list[address][index]
+        public_key_str = client.online_users[address][index]
     except:
         print("Error: Cannot found this client")
         return
@@ -89,7 +81,8 @@ async def main():
 
     # Client connects to server
     client = Client(server_url)
-    await client.connect_to_server()
+    t = Thread(target=asyncio.run, args=(client.connect_to_server(),))
+    t.start()
 
     await get_client_inputs(client)
 

@@ -28,6 +28,9 @@ class Client:
         self.fingerprint = self.generate_fingerprint(self.public_key)
         self.websocket = None
 
+        # List of currently online users { server_address1: [client public key 1, client public key 2, ...] }
+        self.online_users = {}
+
     def generate_fingerprint(self, public_key):
         """Generates a fingerprint based on the public key (hash)."""
         public_bytes = public_key.public_bytes(
@@ -74,12 +77,13 @@ class Client:
     # CONNECT TO SERVER
     async def connect_to_server(self):
         try:
-            self.websocket = await connect(f"ws://{self.server_url}")
-            await self.send_message(self.websocket, chat_type="hello")
-            # async with connect(f"ws://{self.server_url}") as websocket:
-            #     logging.info(f"Connected to {self.server_url}")
-            #     await self.send_message(websocket, chat_type="hello")
-                # await self.listen(websocket)
+            # self.websocket = await connect(f"ws://{self.server_url}")
+            # await self.send_message(self.websocket, chat_type="hello")
+            async with connect(f"ws://{self.server_url}") as websocket:
+                self.websocket = websocket
+                logging.info(f"Connected to {self.server_url}")
+                await self.send_message(websocket, chat_type="hello")
+                await self.listen(websocket)
         except Exception as e:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
 
@@ -87,7 +91,7 @@ class Client:
         """Listen for incoming messages"""
         try:
             async for message in websocket:
-                logging.info(f"Received message from server: {message}")
+                # logging.info(f"Received message from server: {message}")
                 data = json.loads(message)
                 self.handle_message(data)
         except Exception as e:
@@ -157,10 +161,30 @@ class Client:
         }
 
         await self.websocket.send(json.dumps(request))
-        response = await self.websocket.recv()
-        response = json.loads(response)
-        return response
 
     def handle_message(self, data):
         """Handle incoming messages."""
-        logging.info(f"Handling message: {data}")
+        message_type = data.get("type", None)
+
+        if message_type == "client_list":
+            self.handle_client_list(data)
+        else:
+            logging.error(f"Invalid message: {data}")
+
+    def handle_client_list(self, data):
+        logging.info("Client receives client_list")
+
+        servers = data.get("servers", None)
+        if servers is None:
+            logging.error("Invalid client_list format")
+            return
+
+        log = "List of online users:\n"
+
+        for item in servers:
+            server_address, clients = item["address"], item["clients"]
+            self.online_users[server_address] = clients
+            for i in range(len(clients)):
+                log += f"- {i}@{server_address}\n"
+
+        logging.info(log)
