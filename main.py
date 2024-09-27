@@ -20,6 +20,9 @@ async def get_client_inputs(client: Client):
     while choice != "q":
         if choice == "chat":
             await handle_chat(client)
+        elif choice == "public":
+            await handle_public_chat(client)
+
         choice = input("Choice: ")
 
 
@@ -63,6 +66,18 @@ async def handle_chat(client: Client):
     )
 
 
+async def handle_public_chat(client: Client):
+    # Compose message
+    message = input("Compose message for public chat: ")
+
+    # Send public chat
+    await client.send_message(
+        client.websocket,
+        message,
+        chat_type="public_chat",
+    )
+
+
 async def main():
     # Arguments: server_url
     server_url = sys.argv[1]
@@ -72,7 +87,6 @@ async def main():
     await client.connect_to_server()
 
     await get_client_inputs(client)
-    # await server.stop()
 
 
 asyncio.run(main())

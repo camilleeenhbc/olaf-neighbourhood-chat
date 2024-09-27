@@ -29,11 +29,13 @@ class Server:
         self.neighbourhood = Neighbourhood(self.url)
 
         # maybe change client to dict?? stores # Fingerprint: {websocket, counter}
-        # TODO: Change to real list of client RSAs
-        self.clients = []  # List of clients connecting to this server
+        # {websocket: {public_key, fingerprint, counter}}
+        self.clients = {}  # List of clients connecting to this server
 
     def add_neighbour_servers(self, server_urls: List[str]):
-        self.neighbour_servers += server_urls
+        for url in server_urls:
+            if url not in self.neighbour_servers:
+                self.neighbour_servers.append(url)
 
     async def connect_to_neighbourhood(self):
         """Create client connections for every neighbour servers"""
@@ -69,7 +71,7 @@ class Server:
 
     async def stop(self):
         logging.info(f"Closing {self.url}")
-        self.clients = []
+        self.clients = {}
         await self.request_client_update()
         self._websocket_server.close()
 
@@ -124,11 +126,11 @@ class Server:
             message_type = data.get("type", None)
             logging.info(f"{self.url} receives {message_type} message")
             if message_type == "chat":
-                await self.receive_chat(data)
+                await self.receive_chat(websocket, message)
             elif message_type == "hello":
-                await self.receive_hello(data)
+                await self.receive_hello(websocket, data)
             elif message_type == "public_chat":
-                await self.receive_public_chat(data)
+                await self.receive_public_chat(websocket, message)
             elif message_type == "server_hello":
                 await self.receive_server_hello(websocket, data)
             else:
@@ -151,61 +153,48 @@ class Server:
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
 
-    async def receive_chat(self, message):
+    async def receive_chat(self, websocket, message):
         logging.info(f"{self.url} receives chat from client:\n{message}")
         pass
 
-    async def receive_hello(self, message):
+    async def receive_hello(self, websocket, message):
         """Save client's public key and send client update to other servers"""
         client_public_key = message["public_key"]
         logging.info(f"{self.url} receives hello from client")
-        self.clients.append(client_public_key)
+        self.clients[websocket] = {
+            "public_key": client_public_key,
+        }
         await self.send_client_update()
 
-    # check that a message is valid
-    def check_public_chat(self, message):
-        if message.get("type") != "signed_data":
-            return False
-
-        # check fingerprint exists
-        fingerprint = message["data"].get("sender")
-        if not fingerprint:
-            return False
-
-        # check client exists
-        client = self.clients.get(fingerprint)
-        if not client:
-            return False
-
-        return True
-
-    # broadcast message to client
-    async def broadcast_to_clients(
-        self, websocket: websocket_server.ServerConnection, message
-    ):
-        try:
-            await websocket.send(message)
-            logging.info(f"{self.url} broadcasted public message to clients")
-        except Exception as e:
-            logging.error(
-                f"{self.url} public message failed to broadcast to clients: {e}"
-            )
-
     # receive public chats and braodcast to connected clients and other neighbourhoods if valid message
-    async def receive_public_chat(self, message):
-        logging.info(f"{self.url} recieved public chat message")
+    async def receive_public_chat(self, websocket, request):
+        logging.info(f"{self.url} received public chat message")
 
-        # if invalid then do not broadcast and return
-        if not self.check_public_chat(message):
-            logging.error(f"{self.url} invalid public chat message")
+        fingerprint = request["data"].get("sender", None)
+        message = request["data"].get("message", None)
+        if fingerprint is None or message is None:
+            logging.error(f"{self.url} received an invalid public_chat message")
             return
 
+        # Save client fingerprint - ignore if it comes from other neighbour servers
+        sender = self.clients.get(websocket, None)
+        if websocket not in self.neighbour_websockets:
+            if sender is None:
+                logging.error(f"{self.url} can't find the client for public_chat")
+                return
+
+            sender["fingerprint"] = fingerprint
+
         # send to clients in the server
-        for client in self.clients.values():
-            await self.broadcast_to_clients(client["websocket"])
+        for client in self.clients:
+            if client == websocket:
+                continue
+
+            await self.send_response(client, request)
+
         # request neighborhoods broadcast message
-        if self.neighbourhood:
-            await self.neighbourhood.broadcast_request(message)
+        if sender:
+            await self.neighbourhood.broadcast_request(request)
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
@@ -237,7 +226,7 @@ class Server:
 
         response = {
             "type": "client_update",
-            "clients": self.clients,
+            "clients": self.clients.values(),
         }
 
         if websocket is None:
