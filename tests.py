@@ -7,8 +7,7 @@ server_urls = ["localhost:5000", "localhost:5001", "localhost:5002"]
 # server_urls = ["localhost:5000", "localhost:5001"]
 
 for url in server_urls:
-    hostname, port = url.split(":")
-    server = Server(hostname, port)
+    server = Server(url)
 
     # Remove current url from neighbours
     neighbours = server_urls.copy()

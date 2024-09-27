@@ -64,11 +64,11 @@ async def handle_chat(client: Client):
 
 
 async def main():
-    # Arguments: server_port
-    server_port = int(sys.argv[1])
+    # Arguments: server_url
+    server_url = sys.argv[1]
 
     # Client connects to server
-    client = Client(f"localhost:{server_port}")
+    client = Client(server_url)
     await client.connect_to_server()
 
     await get_client_inputs(client)

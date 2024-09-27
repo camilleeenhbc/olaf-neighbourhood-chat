@@ -19,18 +19,16 @@ logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
 
 class Server:
-    def __init__(self, address: str = "localhost", port: int = 80) -> None:
+    def __init__(self, url: str = "localhost:80") -> None:
         self._websocket_server: Optional[websocket_server.Server] = None
 
-        self.address = address
-        self.port = port
-        self.url = f"{address}:{port}"
+        self.url = url
 
         self.neighbour_servers = []
         self.neighbour_websockets = {}  # Websocket (ServerConnection): Neighbour URL
         self.neighbourhood = Neighbourhood(self.url)
 
- # maybe change client to dict?? stores # Fingerprint: {websocket, counter}
+        # maybe change client to dict?? stores # Fingerprint: {websocket, counter}
         # TODO: Change to real list of client RSAs
         self.clients = []  # List of clients connecting to this server
 
@@ -61,8 +59,9 @@ class Server:
         """
         Start the server which listens for message on the specified address and port
         """
+        address, port = self.url.split(":")
         self._websocket_server = await websocket_server.serve(
-            self.listen, self.address, self.port
+            self.listen, address, port
         )
         await self.connect_to_neighbourhood()
         await self.request_client_update()
@@ -172,21 +171,25 @@ class Server:
         fingerprint = message["data"].get("sender")
         if not fingerprint:
             return False
-        
+
         # check client exists
         client = self.clients.get(fingerprint)
         if not client:
             return False
-    
+
         return True
-    
+
     # broadcast message to client
-    async def broadcast_to_clients(self, websocket: websocket_server.ServerConnection, message):
+    async def broadcast_to_clients(
+        self, websocket: websocket_server.ServerConnection, message
+    ):
         try:
             await websocket.send(message)
             logging.info(f"{self.url} broadcasted public message to clients")
         except Exception as e:
-            logging.error(f"{self.url} public message failed to broadcast to clients: {e}")
+            logging.error(
+                f"{self.url} public message failed to broadcast to clients: {e}"
+            )
 
     # receive public chats and braodcast to connected clients and other neighbourhoods if valid message
     async def receive_public_chat(self, message):
@@ -196,14 +199,13 @@ class Server:
         if not self.check_public_chat(message):
             logging.error(f"{self.url} invalid public chat message")
             return
-        
+
         # send to clients in the server
         for client in self.clients.values():
             await self.broadcast_to_clients(client["websocket"])
         # request neighborhoods broadcast message
         if self.neighbourhood:
             await self.neighbourhood.broadcast_request(message)
-
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
@@ -271,16 +273,17 @@ class Server:
         logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
 
+
 if __name__ == "__main__":
-    # Arguments: server_port num_neighbours neighbour1_url neighbour2_url ...
-    # Example: 8080 2 localhost:8081 localhost:8081
-    server_port = int(sys.argv[1])
+    # Arguments: server_url num_neighbours neighbour1_url neighbour2_url ...
+    # Example: localhost:8080 2 localhost:8081 localhost:8081
+    server_url = sys.argv[1]
     num_neighbours = int(sys.argv[2])
     neighbours = []
     for i in range(num_neighbours):
         neighbours.append(sys.argv[3 + i])
 
     # Start server
-    server = Server(port=int(server_port))
+    server = Server(server_url)
     server.add_neighbour_servers(neighbours)
     asyncio.run(server.start())
