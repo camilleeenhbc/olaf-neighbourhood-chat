@@ -2,12 +2,14 @@ import logging
 import sys
 import json
 import asyncio
+import hashlib
 import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
 
 import base64
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.exceptions import InvalidSignature
@@ -165,10 +167,70 @@ class Server:
 
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
+    
+    # verify that message has not been tampered with
+    def check_signature(self, public_key, message, signature):
+        try:
+            public_key.verify(
+                base64.b64decode(signature),
+                json.dumps(message["data"]).encode() + str(message["counter"]).encode(),
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            return True
+        except InvalidSignature:
+            return False
+    
+    # check message counter, client, and signature
+    def check_private_message(self, websocket, message):
+        sender = self.clients.get(websocket)
+        if not sender:
+            logging.error(f"{self.url} message from unknown client detected")
+            return False
 
+        if not self.check_signature(sender["public_key"], message, message["signature"]):
+            logging.error(f"{self.url} message with invalid signature detected")
+            return False
+
+        if message["counter"] < sender["counter"]:
+            logging.error(f"{self.url} message with replay attack detected")
+            return False
+
+        sender["counter"] = message["counter"]
+        return True
+    
+    async def send_private_message(self, chat_data):
+        for client_websocket, client_info in self.clients.items():
+            client_fingerprint = client_info['fingerprint']
+
+            # match encrypted symmetric key to client using fingerprint
+            matched_key = None
+            for encrypted_key in chat_data['symm_keys']:
+                if encrypted_key['fingerprint'] == client_fingerprint:
+                    matched_key = encrypted_key['symm_key']
+                    break
+
+            if matched_key:
+                await self.send_response(client_websocket, {
+                    "type": "chat",
+                    "iv": chat_data['iv'],
+                    "symm_key": matched_key,
+                    "chat": chat_data['chat']
+                })
+            else:
+                logging.warning(f"No matching symmetric key found for client {client_fingerprint}")
+
+    # recieve private chat
     async def receive_chat(self, websocket, message):
         logging.info(f"{self.url} receives chat from client")
-        destination_servers = message["data"].get("destination_servers", None)
+
+        if not self.check_private_message(websocket, message):
+            return
+        
+        destination_servers = message["data"].get("destination_servers", [])
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
@@ -177,13 +239,14 @@ class Server:
             logging.info(
                 f"{self.url} receives chat as the destination server:\n{message}"
             )
+            await self.send_private_message(message["data"])
             return
 
         for server_url in destination_servers:
             websocket = self.neighbourhood.find_active_server(server_url)
             if websocket is None:
                 logging.error(f"{self.url} cannot find destination server {server_url}")
-                return
+                continue
 
             await self.neighbourhood.send_request(websocket, message)
 
@@ -292,6 +355,14 @@ class Server:
             neighbour_url = self.neighbourhood.active_servers[websocket]
         logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
+
+    # generate a public key for server
+    def generate_fingerprint(self, public_key):
+        public_bytes = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        return base64.b64encode(hashlib.sha256(public_bytes).digest()).decode()
 
 
 if __name__ == "__main__":
