@@ -334,6 +334,13 @@ class Server:
                 }
             )
 
+        servers.append(
+            {
+                "address": self.url,
+                "clients": [client["public_key"] for client in self.clients.values()],
+            }
+        )
+
         response = {
             "type": "client_list",
             "servers": servers,
@@ -393,8 +400,7 @@ class Server:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         return base64.b64encode(hashlib.sha256(public_bytes).digest()).decode()
-    
-    
+
     def decrypt_chat(message, self):
         try:
             data = message["data"]
@@ -410,34 +416,35 @@ class Server:
                 print("client symmetric key not found")
                 return None
 
-            # decrypy key 
+            # decrypy key
             symm_key = self.private_key.decrypt(
                 encrypted_symm_key,
                 padding.OAEP(
                     mgf=padding.MGF1(algorithm=hashes.SHA256()),
                     algorithm=hashes.SHA256(),
-                    label=None
-                )
+                    label=None,
+                ),
             )
 
             # get decoded iv and ciphertext
-            iv = base64.b64decode(data['iv'])
-            ciphertext = base64.b64decode(data['chat'])
+            iv = base64.b64decode(data["iv"])
+            ciphertext = base64.b64decode(data["chat"])
 
             # use to decypt the message
-            cipher = Cipher(algorithms.AES(symm_key), modes.GCM(iv, tag=ciphertext[-16:]))
+            cipher = Cipher(
+                algorithms.AES(symm_key), modes.GCM(iv, tag=ciphertext[-16:])
+            )
             decryptor = cipher.decryptor()
             text = decryptor.update(ciphertext[:-16]) + decryptor.finalize()
 
             # json the message
-            chat_content = json.loads(text.decode('utf-8'))
+            chat_content = json.loads(text.decode("utf-8"))
 
             return chat_content
 
         except Exception as e:
             print(f"Error decoding chat: {str(e)}")
             return None
-        
 
     async def start_http_server(self, address):
         """Start the HTTP server for handling file uploads"""
