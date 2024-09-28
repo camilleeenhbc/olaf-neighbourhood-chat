@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
 from message import Message
+import crypto
 import aiohttp
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
@@ -26,19 +27,11 @@ class Client:
             backend=default_backend(),
         )
         self.public_key = self.private_key.public_key()
-        self.fingerprint = self.generate_fingerprint(self.public_key)
+        self.fingerprint = crypto.generate_fingerprint(self.public_key)
         self.websocket = None
 
         # List of currently online users { server_address1: [client public key 1, client public key 2, ...] }
         self.online_users = {}
-
-    def generate_fingerprint(self, public_key):
-        """Generates a fingerprint based on the public key (hash)."""
-        public_bytes = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(public_bytes).hexdigest()
 
     async def get_public_key_from_fingerprint(self, fingerprint):
         """
@@ -49,10 +42,8 @@ class Client:
             for client in clients:
                 # Assuming the client entry contains the public key in PEM format
                 public_key_pem = client
-                public_key = serialization.load_pem_public_key(
-                    public_key_pem.encode(), backend=default_backend()
-                )
-                client_fingerprint = self.generate_fingerprint(public_key)
+                public_key = crypto.load_pem_public_key(public_key_pem)
+                client_fingerprint = crypto.generate_fingerprint(public_key)
                 if client_fingerprint == fingerprint:
                     return public_key
         return None
@@ -217,11 +208,7 @@ class Client:
             # Transform public key string to public key object
             client_public_keys = []
             for client in clients:
-                client_public_keys.append(
-                    serialization.load_pem_public_key(
-                        client.encode(), backend=default_backend()
-                    )
-                )
+                client_public_keys.append(crypto.load_pem_public_key(client))
 
             self.online_users[server_address] = clients
             for i in range(len(clients)):
