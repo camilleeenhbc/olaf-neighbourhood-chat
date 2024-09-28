@@ -128,13 +128,13 @@ class Server:
             logging.info(f"{self.url} removes client")
 
     async def handle_message(
-        self, websocket: websocket_server.ServerConnection, message
+        self, websocket: websocket_server.ServerConnection, message_str
     ):
         """
         Handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        message = json.loads(message)
+        message = json.loads(message_str)
 
         message_type = message.get("type", None)
 
@@ -149,18 +149,29 @@ class Server:
             counter = message.get("counter", None)
             signature = message.get("signature", None)
 
-            data = message.get("data", None)
-            if data is None:
+            if counter is None or signature is None:
                 logging.error(
-                    f"{self.url}: Type and data not found for this message: {message}"
+                    f"Cannot find counter or signature in this message: {message}"
                 )
                 return
 
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except json.JSONDecodeError as e:
-                    print(f"Error converting to JSON: {e}")
+            if websocket in self.clients:
+                public_key = self.clients[websocket]["public_key"]
+                public_key = crypto.load_pem_public_key(public_key)
+                if not crypto.verify_signature(
+                    public_key, signature, message_str, counter
+                ):
+                    logging.error(
+                        f"{self.url} message with invalid signature detected: {message}"
+                    )
+                    return
+
+            data = message.get("data", None)
+            if data is None:
+                logging.error(
+                    f"{self.url}: Cannot find `data` field for this message: {message}"
+                )
+                return
 
             message["data"] = data
 
@@ -210,13 +221,6 @@ class Server:
         sender = self.clients.get(websocket)
         if not sender:
             logging.error(f"{self.url} message from unknown client detected")
-            return False
-
-        public_key = crypto.load_pem_public_key(sender["public_key"])
-        if not crypto.verify_signature(
-            public_key, json.dumps(message), message["signature"], message["counter"]
-        ):
-            logging.error(f"{self.url} message with invalid signature detected")
             return False
 
         if message["counter"] < sender["counter"]:
