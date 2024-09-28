@@ -21,6 +21,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 
 from neighbourhood import Neighbourhood
+from crypto import Crypto
+from message import Message
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
@@ -270,12 +272,32 @@ class Server:
 
         if self.url in destination_servers:
             # TODO: Handle chat message while in the destination server
-            logging.info(
-                f"{self.url} receives chat as the destination server:\n{message}"
-            )
-            await self.send_private_message(message["data"])
-            return
+            iv = message["data"].get("iv")
+            symm_keys = message["data"].get("symm_keys")
+            encrypted_chat = message["data"].get("chat")
+             # decode fingerprints
+            participants_b64 = encrypted_chat["participants"]
+            participants = [base64.b64decode(fp).decode() for fp in participants_b64]
 
+            # send message to each participant
+            for i, encrypted_aes_key in enumerate(symm_keys):
+                # decrypt the AES key using the server's private key
+                aes_key = message.decrypt_key(encrypted_aes_key)  
+
+                # decrypt message using AES key
+                decrypted_message = message.decrypt_with_aes(aes_key, iv, encrypted_chat["message"])
+
+                # send message
+                recipient_fingerprint = participants[i]  
+                await self.send_private_message(recipient_fingerprint, message)
+
+            logging.info(
+                f"{self.url} receives chat as the destination server:\n"
+            )
+        else:
+            logging.info(f"{self.url} not in destination servers. Message ignored.")
+
+        # forward the message to neighbourhood
         for server_url in destination_servers:
             websocket = self.neighbourhood.find_active_server(server_url)
             if websocket is None:
@@ -283,6 +305,7 @@ class Server:
                 continue
 
             await self.neighbourhood.send_request(websocket, message)
+        self.clients[websocket]["counter"] += 1
 
     async def receive_hello(self, websocket, message):
         """Save client's public key and send client update to other servers"""
@@ -322,6 +345,8 @@ class Server:
         # request neighborhoods broadcast message
         if sender:
             await self.neighbourhood.broadcast_request(request)
+
+        self.clients[websocket]["counter"] += 1
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
@@ -400,51 +425,6 @@ class Server:
 
         logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
-
-    def decrypt_chat(message, self):
-        try:
-            data = message["data"]
-
-            # get the symmetric key
-            encrypted_symm_key = None
-            for key_data in data["symm_keys"]:
-                if key_data["fingerprint"] == self.fingerprint:
-                    encrypted_symm_key = base64.b64decode(key_data["symm_key"])
-                    break
-
-            if not encrypted_symm_key:
-                print("client symmetric key not found")
-                return None
-
-            # decrypy key
-            symm_key = self.private_key.decrypt(
-                encrypted_symm_key,
-                padding.OAEP(
-                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None,
-                ),
-            )
-
-            # get decoded iv and ciphertext
-            iv = base64.b64decode(data["iv"])
-            ciphertext = base64.b64decode(data["chat"])
-
-            # use to decypt the message
-            cipher = Cipher(
-                algorithms.AES(symm_key), modes.GCM(iv, tag=ciphertext[-16:])
-            )
-            decryptor = cipher.decryptor()
-            text = decryptor.update(ciphertext[:-16]) + decryptor.finalize()
-
-            # json the message
-            chat_content = json.loads(text.decode("utf-8"))
-
-            return chat_content
-
-        except Exception as e:
-            print(f"Error decoding chat: {str(e)}")
-            return None
 
     async def start_http_server(self, address):
         """Start the HTTP server for handling file uploads"""
