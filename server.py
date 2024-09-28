@@ -72,11 +72,10 @@ class Server:
         """
         try:
             address, port = self.url.split(":")
-            self._websocket_server = await websockets.serve(
-                self.listen, address, int(port)
-            )  # WebSocket server
-
-            await self.connect_to_neighbourhood(),
+            self._websocket_server = await websocket_server.serve(
+                self.listen, address, port
+            )
+            await self.connect_to_neighbourhood()
             await self.request_client_update()
             await self._websocket_server.wait_closed()
 
