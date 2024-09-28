@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
 from message import Message
+import aiohttp
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
@@ -261,3 +262,57 @@ class Client:
                 logging.error(f"Signature verification failed for sender: {sender}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
+
+    async def upload_file(self, filename):
+        """Upload a file to the server using an HTTP POST request"""
+        logging.info(f"Uploading file {filename}")
+        url = f"http://localhost:1000/upload"
+        try:
+            async with aiohttp.ClientSession() as session:
+                with open(filename, "rb") as f:
+                    files = {"file": f}
+                    logging.info(f"Uploading file {filename}")
+
+                    # POST request
+                    async with session.post(url, data=files) as response:
+                        if response.status == 200:
+                            logging.info(f"File {filename} uploaded successfully.")
+                        else:
+                            logging.error(
+                                f"Failed to upload file {filename}. Status: {response.status}"
+                            )
+        except aiohttp.ClientError as e:
+            logging.error(f"Error during file upload: {e}")
+        except KeyboardInterrupt:
+            logging.warning("Upload interrupted by user.")
+        finally:
+            logging.info("Upload process cleaned up.")
+
+    async def download_file(self, filename):
+        """Download a file from the aiohttp server asynchronously."""
+        url = f"http://localhost:1000/download/{filename}"
+
+        try:
+            # Create a new aiohttp session
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        # Write the response content to a file
+                        with open(filename, "wb") as f:
+                            while True:
+                                chunk = await response.content.read(
+                                    1024
+                                )  
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+
+                        logging.info(f"File {filename} downloaded successfully.")
+                    else:
+                        logging.error(
+                            f"Failed to download file: {response.status} {await response.text()}"
+                        )
+        except aiohttp.ClientError as e:
+            logging.error(f"Error downloading file: {e}")
+        except Exception as e:
+            logging.error(f"Unexpected error during file download: {e}")

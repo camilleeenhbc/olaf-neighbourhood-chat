@@ -6,6 +6,9 @@ import hashlib
 import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
+from aiohttp import web
+import os
+
 
 import base64
 from cryptography.hazmat.primitives import hashes
@@ -18,6 +21,10 @@ from cryptography.exceptions import InvalidSignature
 from neighbourhood import Neighbourhood
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
+
+UPLOAD_DIRECTORY = "files"
+if not os.path.exists(UPLOAD_DIRECTORY):
+    os.makedirs(UPLOAD_DIRECTORY)
 
 
 class Server:
@@ -62,13 +69,25 @@ class Server:
         """
         Start the server which listens for message on the specified address and port
         """
-        address, port = self.url.split(":")
-        self._websocket_server = await websocket_server.serve(
-            self.listen, address, port
-        )
-        await self.connect_to_neighbourhood()
-        await self.request_client_update()
-        await self._websocket_server.wait_closed()
+        try:
+            address, port = self.url.split(":")
+            self._websocket_server = await websockets.serve(
+                self.listen, address, int(port)
+            )  # WebSocket server
+
+            await self.connect_to_neighbourhood(),
+            await self.request_client_update()
+            await self._websocket_server.wait_closed()
+
+            # await asyncio.gather(
+            #     self.start_http_server(address),  # Start the HTTP server
+            #     self.connect_to_neighbourhood(),  # Connect to neighbouring servers
+            #     self.request_client_update(),
+            #     self._websocket_server.wait_closed(),  # Request client updates
+            # )
+        except Exception as e:
+            logging.error(f"Error occurred in server: {e}")
+            await self.stop()
 
     async def stop(self):
         logging.info(f"Closing {self.url}")
@@ -83,12 +102,16 @@ class Server:
         Listen and handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        while True:
-            try:
-                message = await websocket.recv()
-                await self.handle_message(websocket, message)
-            except websockets.ConnectionClosed:
-                break
+        try:
+            while True:
+                try:
+                    message = await websocket.recv()
+                    await self.handle_message(websocket, message)
+                except websockets.ConnectionClosed as e:
+                    logging.info("WebSocket connection closed: %s", e)
+                    break
+        except Exception as e:
+            logging.error("Error in WebSocket connection: %s", e)
 
     async def handle_message(
         self, websocket: websocket_server.ServerConnection, message
@@ -167,7 +190,7 @@ class Server:
 
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
-    
+
     # verify that message has not been tampered with
     def check_signature(self, public_key, message, signature):
         try:
@@ -176,14 +199,14 @@ class Server:
                 json.dumps(message["data"]).encode() + str(message["counter"]).encode(),
                 padding.PSS(
                     mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
+                    salt_length=padding.PSS.MAX_LENGTH,
                 ),
-                hashes.SHA256()
+                hashes.SHA256(),
             )
             return True
         except InvalidSignature:
             return False
-    
+
     # check message counter, client, and signature
     def check_private_message(self, websocket, message):
         sender = self.clients.get(websocket)
@@ -191,7 +214,9 @@ class Server:
             logging.error(f"{self.url} message from unknown client detected")
             return False
 
-        if not self.check_signature(sender["public_key"], message, message["signature"]):
+        if not self.check_signature(
+            sender["public_key"], message, message["signature"]
+        ):
             logging.error(f"{self.url} message with invalid signature detected")
             return False
 
@@ -201,27 +226,32 @@ class Server:
 
         sender["counter"] = message["counter"]
         return True
-    
+
     async def send_private_message(self, chat_data):
         for client_websocket, client_info in self.clients.items():
-            client_fingerprint = client_info['fingerprint']
+            client_fingerprint = client_info["fingerprint"]
 
             # match encrypted symmetric key to client using fingerprint
             matched_key = None
-            for encrypted_key in chat_data['symm_keys']:
-                if encrypted_key['fingerprint'] == client_fingerprint:
-                    matched_key = encrypted_key['symm_key']
+            for encrypted_key in chat_data["symm_keys"]:
+                if encrypted_key["fingerprint"] == client_fingerprint:
+                    matched_key = encrypted_key["symm_key"]
                     break
 
             if matched_key:
-                await self.send_response(client_websocket, {
-                    "type": "chat",
-                    "iv": chat_data['iv'],
-                    "symm_key": matched_key,
-                    "chat": chat_data['chat']
-                })
+                await self.send_response(
+                    client_websocket,
+                    {
+                        "type": "chat",
+                        "iv": chat_data["iv"],
+                        "symm_key": matched_key,
+                        "chat": chat_data["chat"],
+                    },
+                )
             else:
-                logging.warning(f"No matching symmetric key found for client {client_fingerprint}")
+                logging.warning(
+                    f"No matching symmetric key found for client {client_fingerprint}"
+                )
 
     # recieve private chat
     async def receive_chat(self, websocket, message):
@@ -229,7 +259,7 @@ class Server:
 
         if not self.check_private_message(websocket, message):
             return
-        
+
         destination_servers = message["data"].get("destination_servers", [])
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
@@ -360,9 +390,61 @@ class Server:
     def generate_fingerprint(self, public_key):
         public_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         return base64.b64encode(hashlib.sha256(public_bytes).digest()).decode()
+
+    async def start_http_server(self, address):
+        """Start the HTTP server for handling file uploads"""
+        app = web.Application()
+        app.router.add_post(
+            "/upload", self.handle_file_upload
+        )  # HTTP POST route for file upload
+        app.router.add_get("/download/{filename}", self.handle_download)
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, address, 1000)  # HTTP server on port 1000
+        await site.start()
+        logging.info(f"HTTP server started on http://{address}:1000")
+
+    async def handle_file_upload(self, request):
+        """Handle file upload via HTTP POST"""
+        logging.info("Server handles file upload")
+        reader = await request.multipart()
+
+        # Process file part
+        field = await reader.next()
+        if field.name == "file":
+            filename = field.filename
+            file_path = os.path.join(UPLOAD_DIRECTORY, filename)
+
+            # Write the file to the server's upload directory
+            with open(file_path, "wb") as f:
+                while True:
+                    chunk = await field.read_chunk()  # Read the file chunk by chunk
+                    if not chunk:
+                        break
+                    f.write(chunk)
+
+            logging.info(f"File {filename} saved at {file_path}")
+            return web.Response(text=f"File {filename} uploaded successfully.")
+
+        return web.Response(status=400, text="No file found in request.")
+
+    async def handle_download(self, request):
+        """Handle file downloads via HTTP GET."""
+        filename = request.match_info.get("filename", None)
+
+        if not filename:
+            return web.Response(status=400, text="Filename not specified.")
+
+        file_path = os.path.join(UPLOAD_DIRECTORY, filename)
+
+        if not os.path.exists(file_path):
+            return web.Response(status=404, text="File not found.")
+
+        return web.FileResponse(file_path)
 
 
 if __name__ == "__main__":
