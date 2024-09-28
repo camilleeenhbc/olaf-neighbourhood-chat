@@ -38,17 +38,12 @@ async def handle_online_users(client: Client):
 async def handle_chat(client: Client):
     # Choose chat participant
     target_chat = await asyncio.to_thread(input, "Choose participant: ")
-    try:
-        index, address = target_chat.split("@")
-        index = int(index)
-        public_key_str = client.online_users[address][index]
-    except:
+
+    index, address = target_chat.split("@")
+    public_key = client.get_public_key_from_username(target_chat)
+    if public_key is None:
         print("Error: Cannot found this client")
         return
-
-    public_key = serialization.load_pem_public_key(
-        public_key_str.encode(), backend=default_backend()
-    )
 
     # Compose message
     message = await asyncio.to_thread(input, f"Compose message to {target_chat}: ")

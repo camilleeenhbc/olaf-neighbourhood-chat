@@ -213,6 +213,16 @@ class Client:
 
         for item in servers:
             server_address, clients = item["address"], item["clients"]
+
+            # Transform public key string to public key object
+            client_public_keys = []
+            for client in clients:
+                client_public_keys.append(
+                    serialization.load_pem_public_key(
+                        client.encode(), backend=default_backend()
+                    )
+                )
+
             self.online_users[server_address] = clients
             for i in range(len(clients)):
                 log += f"- {i}@{server_address}\n"
@@ -233,6 +243,23 @@ class Client:
         else:
             logging.error("Invalid message type")
 
+    def get_username_from_public_key(self, public_key):
+        """Get username from public key in the format of index@server_address"""
+        for server_address, clients in self.online_users.items():
+            if public_key in clients:
+                index = clients.index(public_key)
+                return f"{index}@{server_address}"
+        return None
+
+    def get_public_key_from_username(self, username: str):
+        """Get public key from username in the format of index@server_address"""
+        index, address = username.split("@")
+        index = int(index)
+        try:
+            return self.online_users[address][index]
+        except:
+            return None
+
     async def handle_public_chat(self, signature, message, counter):
         """
         Handles incoming public chat messages and verifies the sender's signature.
@@ -241,11 +268,17 @@ class Client:
             sender = message.get("sender")
             # Get public keys from online users
             sender_public_key = await self.get_public_key_from_fingerprint(sender)
+            if sender_public_key is None:
+                logging.error(f"Cannot get public key from public chat sender")
+                return
+
             if self.verify_signature(
                 sender_public_key, signature, json.dumps(message), counter
             ):
                 public_message = message.get("message", "")
-                logging.info(f"Received public chat from {sender}: {public_message}")
+                sender_username = self.get_username_from_public_key(sender_public_key)
+                logging.info(f"(public chat) {sender_username}: {public_message}")
+                # logging.info(f"Received public chat from {sender}: {public_message}")
             else:
                 logging.error(f"Signature verification failed for sender: {sender}")
         except Exception as e:
