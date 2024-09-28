@@ -8,6 +8,7 @@ import websockets.asyncio.server as websocket_server
 from typing import List, Optional
 from aiohttp import web
 import os
+import crypto
 
 
 import base64
@@ -127,13 +128,13 @@ class Server:
             logging.info(f"{self.url} removes client")
 
     async def handle_message(
-        self, websocket: websocket_server.ServerConnection, message
+        self, websocket: websocket_server.ServerConnection, message_str
     ):
         """
         Handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        message = json.loads(message)
+        message = json.loads(message_str)
 
         message_type = message.get("type", None)
 
@@ -148,18 +149,29 @@ class Server:
             counter = message.get("counter", None)
             signature = message.get("signature", None)
 
-            data = message.get("data", None)
-            if data is None:
+            if counter is None or signature is None:
                 logging.error(
-                    f"{self.url}: Type and data not found for this message: {message}"
+                    f"Cannot find counter or signature in this message: {message}"
                 )
                 return
 
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except json.JSONDecodeError as e:
-                    print(f"Error converting to JSON: {e}")
+            if websocket in self.clients:
+                public_key = self.clients[websocket]["public_key"]
+                public_key = crypto.load_pem_public_key(public_key)
+                if not crypto.verify_signature(
+                    public_key, signature, message_str, counter
+                ):
+                    logging.error(
+                        f"{self.url} message with invalid signature detected: {message}"
+                    )
+                    return
+
+            data = message.get("data", None)
+            if data is None:
+                logging.error(
+                    f"{self.url}: Cannot find `data` field for this message: {message}"
+                )
+                return
 
             message["data"] = data
 
@@ -204,33 +216,11 @@ class Server:
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
 
-    # verify that message has not been tampered with
-    def check_signature(self, public_key, message, signature):
-        try:
-            public_key.verify(
-                base64.b64decode(signature),
-                json.dumps(message["data"]).encode() + str(message["counter"]).encode(),
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH,
-                ),
-                hashes.SHA256(),
-            )
-            return True
-        except InvalidSignature:
-            return False
-
     # check message counter, client, and signature
     def check_private_message(self, websocket, message):
         sender = self.clients.get(websocket)
         if not sender:
             logging.error(f"{self.url} message from unknown client detected")
-            return False
-
-        if not self.check_signature(
-            sender["public_key"], message, message["signature"]
-        ):
-            logging.error(f"{self.url} message with invalid signature detected")
             return False
 
         if message["counter"] < sender["counter"]:
@@ -252,6 +242,7 @@ class Server:
                     break
 
             if matched_key:
+                logging.info(f"{self.url} sends private message")
                 await self.send_response(
                     client_websocket,
                     {
@@ -268,7 +259,7 @@ class Server:
 
     # recieve private chat
     async def receive_chat(self, websocket, message):
-        logging.info(f"{self.url} receives chat from client")
+        logging.info(f"{self.url} receives chat from client: {message}")
 
         if not self.check_private_message(websocket, message):
             return
@@ -409,14 +400,6 @@ class Server:
 
         logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
-
-    # generate a fingerprint for server
-    def generate_fingerprint(self, public_key):
-        public_bytes = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return base64.b64encode(hashlib.sha256(public_bytes).digest()).decode()
 
     def decrypt_chat(message, self):
         try:
