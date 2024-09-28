@@ -112,6 +112,21 @@ class Server:
                     break
         except Exception as e:
             logging.error("Error in WebSocket connection: %s", e)
+        finally:
+            self.remove_websocket(websocket)
+            await websocket.close()
+
+    def remove_websocket(self, websocket):
+        """Remove websocket from server/neighbourhood states"""
+        if websocket in self.neighbour_websockets:
+            neighbour_url = self.neighbour_websockets.pop(websocket)
+            logging.info(f"{self.url} removes neighbour websocket: {neighbour_url}")
+        elif websocket in self.neighbourhood.active_servers:
+            neighbour_url = self.neighbourhood.active_servers.pop(websocket)
+            logging.info(f"{self.url} removes neighbour websocket: {neighbour_url}")
+        elif websocket in self.clients:
+            self.clients.pop(websocket)
+            logging.info(f"{self.url} removes client")
 
     async def handle_message(
         self, websocket: websocket_server.ServerConnection, message
@@ -386,10 +401,14 @@ class Server:
 
     def receive_client_update(self, websocket, message):
         clients = message["clients"]
-        if isinstance(websocket, websocket_server.ServerConnection):
+        if websocket in self.neighbour_websockets:
             neighbour_url = self.neighbour_websockets[websocket]
-        else:
+        elif websocket in self.neighbourhood.active_servers:
             neighbour_url = self.neighbourhood.active_servers[websocket]
+        else:
+            logging.error(f"{self.url} receives client_update from invalid websocket")
+            return
+
         logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
 
