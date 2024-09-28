@@ -68,8 +68,9 @@ class Client:
     # Sign the message using the RSA-PSS scheme
     # Signature should be Base64 of data + counter
     def sign_message(self, message):
+        message_bytes = message + str(self.counter).encode()
         signature = self.private_key.sign(
-            message,
+            message_bytes,
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
             ),
@@ -78,12 +79,13 @@ class Client:
         self.signature = base64.b64encode(signature).decode()
         return self.signature
 
-    def verify_signature(self, public_key, signature, message_data):
+    def verify_signature(self, public_key, signature, message_data, counter):
         try:
             # Verify signature using sender's public key and the original message data
+            message_bytes = message_data.encode() + str(counter).encode()
             public_key.verify(
                 base64.b64decode(signature),
-                message_data.encode(),
+                message_bytes,
                 padding.PSS(
                     mgf=padding.MGF1(hashes.SHA256()),
                     salt_length=padding.PSS.MAX_LENGTH,
@@ -163,8 +165,11 @@ class Client:
             logging.error("Invalid chat type specified.")
             return
 
+        # Inrement counter
+        self.counter += 1
         # Sign message
         chat_message_bytes = json.dumps(message_data).encode()
+
         signed_message = {
             "type": "signed_data",
             "data": message_data,
@@ -222,13 +227,13 @@ class Client:
 
         message_type = message_data.get("type", None)
         if message_type == "public_chat":
-            await self.handle_public_chat(signature, message_data)
+            await self.handle_public_chat(signature, message_data, counter)
         elif message_type == "chat":
-            await self.handle_chat(signature, message_data)
+            await self.handle_chat(signature, message_data, counter)
         else:
             logging.error("Invalid message type")
 
-    async def handle_public_chat(self, signature, message):
+    async def handle_public_chat(self, signature, message, counter):
         """
         Handles incoming public chat messages and verifies the sender's signature.
         """
@@ -236,7 +241,9 @@ class Client:
             sender = message.get("sender")
             # Get public keys from online users
             sender_public_key = await self.get_public_key_from_fingerprint(sender)
-            if self.verify_signature(sender_public_key, signature, json.dumps(message)):
+            if self.verify_signature(
+                sender_public_key, signature, json.dumps(message), counter
+            ):
                 public_message = message.get("message", "")
                 logging.info(f"Received public chat from {sender}: {public_message}")
             else:
@@ -244,7 +251,7 @@ class Client:
         except Exception as e:
             logging.error(f"Error processing public chat message: {e}")
 
-    async def handle_chat(self, signature, message):
+    async def handle_chat(self, signature, message, counter):
         """
         Handles incoming chat messages, verifies the sender's signature,
         and logs the message if the signature is valid.
@@ -255,7 +262,9 @@ class Client:
             sender = participants[0]  # sender's fingerprint comes first
             sender_public_key = await self.get_public_key_from_fingerprint(sender)
 
-            if self.verify_signature(sender_public_key, signature, json.dumps(message)):
+            if self.verify_signature(
+                sender_public_key, signature, json.dumps(message), counter
+            ):
                 public_message = chat.get("message", "")
                 logging.info(f"Received chat message: {public_message}")
             else:
@@ -300,9 +309,7 @@ class Client:
                         # Write the response content to a file
                         with open(filename, "wb") as f:
                             while True:
-                                chunk = await response.content.read(
-                                    1024
-                                )  
+                                chunk = await response.content.read(1024)
                                 if not chunk:
                                     break
                                 f.write(chunk)
