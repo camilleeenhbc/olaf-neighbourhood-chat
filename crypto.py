@@ -18,3 +18,11 @@ def load_pem_public_key(public_key_str: str):
     return serialization.load_pem_public_key(
         public_key_str.encode(), backend=default_backend()
     )
+
+
+def export_public_key(public_key: rsa.RSAPublicKey):
+    """Export the public key to PEM format"""
+    return public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()

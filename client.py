@@ -48,13 +48,6 @@ class Client:
                     return public_key
         return None
 
-    def export_public_key(self):
-        """Export the public key to PEM format"""
-        return self.public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-
     # SIGNATURE
     # Sign the message using the RSA-PSS scheme
     # Signature should be Base64 of data + counter
@@ -134,7 +127,9 @@ class Client:
         if chat_type == "hello":
             message_data = {
                 "type": "hello",
-                "public_key": self.export_public_key().decode(),  # Exporting public key as PEM format
+                "public_key": crypto.export_public_key(
+                    self.public_key
+                ),  # Exporting public key as PEM format
             }
 
         elif chat_type == "chat":  # Private chat
@@ -210,7 +205,7 @@ class Client:
             for client in clients:
                 client_public_keys.append(crypto.load_pem_public_key(client))
 
-            self.online_users[server_address] = clients
+            self.online_users[server_address] = client_public_keys
             for i in range(len(clients)):
                 log += f"- {i}@{server_address}\n"
 

@@ -2,8 +2,6 @@ import sys
 import asyncio
 import logging
 from client import Client
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.backends import default_backend
 
 # logging.basicConfig(level=logging.ERROR)
 # logging.disable()
