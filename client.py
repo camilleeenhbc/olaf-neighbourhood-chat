@@ -63,24 +63,6 @@ class Client:
         self.signature = base64.b64encode(signature).decode()
         return self.signature
 
-    def verify_signature(self, public_key, signature, message_data, counter):
-        try:
-            # Verify signature using sender's public key and the original message data
-            message_bytes = message_data.encode() + str(counter).encode()
-            public_key.verify(
-                base64.b64decode(signature),
-                message_bytes,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH,
-                ),
-                hashes.SHA256(),
-            )
-            return True
-        except InvalidSignature:
-            logging.error("Invalid signature.")
-            return False
-
     # CONNECT TO SERVER
     async def connect_to_server(self):
         """Create connection to server"""
@@ -254,7 +236,7 @@ class Client:
                 logging.error(f"Cannot get public key from public chat sender")
                 return
 
-            if self.verify_signature(
+            if crypto.verify_signature(
                 sender_public_key, signature, json.dumps(message), counter
             ):
                 public_message = message.get("message", "")
@@ -277,7 +259,7 @@ class Client:
             sender = participants[0]  # sender's fingerprint comes first
             sender_public_key = await self.get_public_key_from_fingerprint(sender)
 
-            if self.verify_signature(
+            if crypto.verify_signature(
                 sender_public_key, signature, json.dumps(message), counter
             ):
                 public_message = chat.get("message", "")

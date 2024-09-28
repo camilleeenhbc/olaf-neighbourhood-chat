@@ -1,3 +1,4 @@
+import base64
 import hashlib
 from cryptography.hazmat.primitives.asymmetric import rsa, padding, types
 from cryptography.hazmat.primitives import hashes, serialization
@@ -26,3 +27,23 @@ def export_public_key(public_key: rsa.RSAPublicKey):
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode()
+
+
+def verify_signature(
+    public_key: rsa.RSAPublicKey, signature, message_data: str, counter
+):
+    try:
+        # Verify signature using sender's public key and the original message data
+        message_bytes = message_data.encode() + str(counter).encode()
+        public_key.verify(
+            base64.b64decode(signature),
+            message_bytes,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+        return True
+    except InvalidSignature:
+        return False
