@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 
 from neighbourhood import Neighbourhood
@@ -356,13 +357,58 @@ class Server:
         logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
 
-    # generate a public key for server
+    # generate a fingerprint for server
     def generate_fingerprint(self, public_key):
         public_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
         return base64.b64encode(hashlib.sha256(public_bytes).digest()).decode()
+    
+    
+    def decrypt_chat(message, self):
+        try:
+            data = message["data"]
+
+            # get the symmetric key
+            encrypted_symm_key = None
+            for key_data in data["symm_keys"]:
+                if key_data["fingerprint"] == self.fingerprint:
+                    encrypted_symm_key = base64.b64decode(key_data["symm_key"])
+                    break
+
+            if not encrypted_symm_key:
+                print("client symmetric key not found")
+                return None
+
+            # decrypy key 
+            symm_key = self.private_key.decrypt(
+                encrypted_symm_key,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+
+            # get decoded iv and ciphertext
+            iv = base64.b64decode(data['iv'])
+            ciphertext = base64.b64decode(data['chat'])
+
+            # use to decypt the message
+            cipher = Cipher(algorithms.AES(symm_key), modes.GCM(iv, tag=ciphertext[-16:]))
+            decryptor = cipher.decryptor()
+            text = decryptor.update(ciphertext[:-16]) + decryptor.finalize()
+
+            # json the message
+            chat_content = json.loads(text.decode('utf-8'))
+
+            return chat_content
+
+        except Exception as e:
+            print(f"Error decoding chat: {str(e)}")
+            return None
+        
 
 
 if __name__ == "__main__":
