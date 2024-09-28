@@ -102,27 +102,25 @@ class Server:
         Listen and handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        try:
-            while True:
-                try:
-                    message = await websocket.recv()
-                    await self.handle_message(websocket, message)
-                except websockets.ConnectionClosed as e:
-                    logging.info("WebSocket connection closed: %s", e)
-                    break
-        except Exception as e:
-            logging.error("Error in WebSocket connection: %s", e)
-        finally:
-            self.remove_websocket(websocket)
-            await websocket.close()
+        while True:
+            try:
+                message = await websocket.recv()
+                await self.handle_message(websocket, message)
+            except websockets.ConnectionClosed as e:
+                logging.info("WebSocket connection closed: %s", e)
+                break
+            except Exception as e:
+                logging.error("Error in WebSocket connection: %s", e)
+                break
+
+        self.remove_websocket(websocket)
+        await websocket.close()
 
     def remove_websocket(self, websocket):
         """Remove websocket from server/neighbourhood states"""
         if websocket in self.neighbour_websockets:
             neighbour_url = self.neighbour_websockets.pop(websocket)
-            logging.info(f"{self.url} removes neighbour websocket: {neighbour_url}")
-        elif websocket in self.neighbourhood.active_servers:
-            neighbour_url = self.neighbourhood.active_servers.pop(websocket)
+            self.neighbourhood.remove_active_server(neighbour_url)
             logging.info(f"{self.url} removes neighbour websocket: {neighbour_url}")
         elif websocket in self.clients:
             self.clients.pop(websocket)
