@@ -43,23 +43,24 @@ class Message:
     # Encrypt message with AES key
     # Perform AES in GCM mode
     # Key length of 32 bytes (128 bits)
-    def encrypt_with_aes(self, receiver_public_keys):
+    def encrypt_chat_message(self, receiver_public_keys):
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
         aes_key = os.urandom(32)
 
+        chat_data = {"participants": self.participants, "message": self.content}
+        chat_data_json = json.dumps(chat_data).encode()
+
         cipher = Cipher(algorithms.AES(aes_key), modes.GCM(self.iv))
         encryptor = cipher.encryptor()
-        self.encrypted_content = (
-            encryptor.update(self.content.encode()) + encryptor.finalize()
-        )
+        self.encrypted_content = encryptor.update(chat_data_json) + encryptor.finalize()
 
         for public_key in receiver_public_keys:
             encrypted_aes_key = self.encrypt_key(public_key, aes_key)
             self.symm_keys.append(encrypted_aes_key)
 
     # Decrypt message with AES key
-    def decrypt_with_aes(self, key: bytes):
+    def decrypt_chat_message(self, key: bytes):
         cipher = Cipher(algorithms.AES(key), modes.GCM(self.iv))
         decryptor = cipher.decryptor()
         decrypted_content = (
@@ -73,20 +74,14 @@ class Message:
         """Prepare an encrypted chat message, including AES key encryption."""
 
         # Encrypt the message and generate keys
-        self.encrypt_with_aes(recipient_public_keys)
+        self.encrypt_chat_message(recipient_public_keys)
 
         chat_message = {
             "type": "chat",
             "destination_servers": destination_servers,
             "iv": base64.b64encode(self.iv).decode(),
             "symm_keys": self.symm_keys,
-            "chat": {
-                "participants": [
-                    base64.b64encode(participant.encode()).decode()
-                    for participant in participants
-                ],
-                "message": base64.b64encode(self.encrypted_content).decode(),
-            },
+            "chat": base64.b64encode(self.encrypted_content).decode(),
         }
 
         return json.dumps(chat_message, indent=2)
