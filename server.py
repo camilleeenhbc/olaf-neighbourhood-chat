@@ -210,15 +210,14 @@ class Server:
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
 
-    # check message counter, client, and signature
     def check_private_message(self, websocket, message):
         sender = self.clients.get(websocket)
         if not sender:
             logging.error(f"{self.url} message from unknown client detected")
             return False
 
+        # Check if the counter is larger or equal to the counter saved in the server
         sender["counter"] = sender.get("counter", 0)
-
         if int(message["counter"]) < int(sender["counter"]):
             logging.error(f"{self.url} message with replay attack detected")
             return False
@@ -227,79 +226,63 @@ class Server:
         sender["counter"] = int(message["counter"]) + 1
         return True
 
-    async def send_private_message(self, chat_data):
-        for client_websocket, client_info in self.clients.items():
-            client_fingerprint = client_info["fingerprint"]
+    async def get_websocket_from_fingerprint(self, fingerprint):
+        """
+        Retrieve a public key using the sender's fingerprint from the online users list.
+        """
+        for websocket, client in self.clients.items():
+            # Assuming the client entry contains the public key in PEM format
+            public_key_pem = client.get("public_key", None)
+            if public_key_pem is None:
+                continue
 
-            # match encrypted symmetric key to client using fingerprint
-            matched_key = None
-            for encrypted_key in chat_data["symm_keys"]:
-                if encrypted_key["fingerprint"] == client_fingerprint:
-                    matched_key = encrypted_key["symm_key"]
-                    break
-
-            if matched_key:
-                logging.info(f"{self.url} sends private message")
-                await self.send_response(
-                    client_websocket,
-                    {
-                        "type": "chat",
-                        "iv": chat_data["iv"],
-                        "symm_key": matched_key,
-                        "chat": chat_data["chat"],
-                    },
-                )
-            else:
-                logging.warning(
-                    f"No matching symmetric key found for client {client_fingerprint}"
-                )
+            public_key = crypto.load_pem_public_key(public_key_pem)
+            client_fingerprint = crypto.generate_fingerprint(public_key)
+            if client_fingerprint == fingerprint:
+                return websocket
+        return None
 
     # recieve private chat
     async def receive_chat(self, websocket, message):
-        logging.info(f"{self.url} receives chat from client: {message}")
-
-        if not self.check_private_message(websocket, message):
-            return
-
         destination_servers = message["data"].get("destination_servers", [])
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
+        if self.url not in destination_servers and not self.check_private_message(
+            websocket, message
+        ):
+            return
+
+        # Handle chat message in the destination server
         if self.url in destination_servers:
-            # TODO: Handle chat message while in the destination server
-            iv = message["data"].get("iv")
-            symm_keys = message["data"].get("symm_keys")
-            encrypted_chat = message["data"].get("chat")
-            # decode fingerprints
-            participants_b64 = encrypted_chat["participants"]
-            participants = [base64.b64decode(fp).decode() for fp in participants_b64]
+            logging.info(f"{self.url} receives chat as the destination server")
 
-            # send message to each participant
-            for i, encrypted_aes_key in enumerate(symm_keys):
-                # decrypt the AES key using the server's private key
-                aes_key = message.decrypt_key(encrypted_aes_key)
+            participants = message["data"]["chat"]["participants"]
 
-                # decrypt message using AES key
-                decrypted_message = message.decrypt_with_aes(
-                    aes_key, iv, encrypted_chat["message"]
-                )
+            for fingerprint in participants:
+                fingerprint = base64.b64decode(fingerprint).decode()
+                client_websocket = self.get_websocket_from_fingerprint(fingerprint)
+                if client_websocket is None:
+                    logging.error(
+                        f"{self.url} can't find client websocket for private chat"
+                    )
+                    continue
 
-                # send message
-                recipient_fingerprint = participants[i]
-                await self.send_private_message(recipient_fingerprint, message)
+                logging.info(f"{self.url} sends private chat to client")
+                await self.send_response(client_websocket, message)
 
-            logging.info(f"{self.url} receives chat as the destination server:\n")
         else:
-            logging.info(f"{self.url} not in destination servers. Message ignored.")
+            # forward the message to destination servers
+            for server_url in destination_servers:
+                websocket = self.neighbourhood.find_active_server(server_url)
+                if websocket is None:
+                    logging.error(
+                        f"{self.url} cannot find destination server {server_url}"
+                    )
+                    continue
 
-        # forward the message to neighbourhood
-        for server_url in destination_servers:
-            websocket = self.neighbourhood.find_active_server(server_url)
-            if websocket is None:
-                logging.error(f"{self.url} cannot find destination server {server_url}")
-                continue
-
-            await self.neighbourhood.send_request(websocket, message)
+                logging.info(f"{self.url} forwards private chat to {server_url}")
+                await self.neighbourhood.send_request(websocket, message)
 
     async def receive_hello(self, websocket, message):
         """Save client's public key and send client update to other servers"""

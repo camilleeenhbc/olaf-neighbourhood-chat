@@ -1,6 +1,7 @@
 import json
 import base64
 import os
+from typing import List
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # for AES
 from cryptography.hazmat.primitives import hashes
@@ -18,7 +19,7 @@ class Message:
         self.message_type = message_type
 
     # Function to encrypt the AES key
-    def encrypt_key(self, receiver_public_key, aes_key):
+    def encrypt_key(self, receiver_public_key: rsa.RSAPublicKey, aes_key):
         encrypted_key = receiver_public_key.encrypt(
             aes_key,
             padding.OAEP(
@@ -68,7 +69,10 @@ class Message:
         return decrypted_content.decode()
 
     def prepare_chat_message(
-        self, recipient_public_keys, destination_servers, participants=[]
+        self,
+        recipient_public_keys: rsa.RSAPublicKey,
+        destination_servers,
+        participants: List[str] = [],
     ):
         """Prepare an encrypted chat message, including AES key encryption."""
 
