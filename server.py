@@ -289,9 +289,11 @@ class Server:
 
         fingerprint = request["data"].get("sender", None)
         message = request["data"].get("message", None)
+        counter = request["data"].get("counter", None) 
         if fingerprint is None or message is None:
             logging.error(f"{self.url} received an invalid public_chat message")
             return
+        
 
         # Save client fingerprint - ignore if it comes from other neighbour servers
         sender = self.clients.get(websocket, None)
@@ -301,6 +303,14 @@ class Server:
                 return
 
             sender["fingerprint"] = fingerprint
+            
+        # check counter
+        if int(counter) < int(sender.get("counter", 0)):
+            logging.error(f"{self.url} replay attack detected for public chat message")
+            return
+
+        # update counter
+        sender["counter"] = int(request["counter"]) + 1
 
         # send to clients in the server
         for client in self.clients:
