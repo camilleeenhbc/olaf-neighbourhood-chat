@@ -207,7 +207,7 @@ class Server:
             return False
 
         # Check if the counter is larger or equal to the counter saved in the server
-        sender["counter"] = sender.get("counter", 0)
+        sender["counter"] = sender.get("counter", "0")
         if int(message["counter"]) < int(sender["counter"]):
             logging.error(f"{self.url} message with replay attack detected")
             return False
@@ -289,28 +289,14 @@ class Server:
 
         fingerprint = request["data"].get("sender", None)
         message = request["data"].get("message", None)
-        counter = request["data"].get("counter", None) 
-        if fingerprint is None or message is None:
+        counter = request.get("counter", None)
+        if counter is None or fingerprint is None or message is None:
             logging.error(f"{self.url} received an invalid public_chat message")
             return
-        
 
-        # Save client fingerprint - ignore if it comes from other neighbour servers
         sender = self.clients.get(websocket, None)
-        if websocket not in self.neighbour_websockets:
-            if sender is None:
-                logging.error(f"{self.url} can't find the client for public_chat")
-                return
-
-            sender["fingerprint"] = fingerprint
-            
-        # check counter
-        if int(counter) < int(sender.get("counter", 0)):
-            logging.error(f"{self.url} replay attack detected for public chat message")
+        if sender is not None and not self.check_private_message(websocket, request):
             return
-
-        # update counter
-        sender["counter"] = int(request["counter"]) + 1
 
         # send to clients in the server
         for client in self.clients:
@@ -322,8 +308,6 @@ class Server:
         # request neighborhoods broadcast message
         if sender:
             await self.neighbourhood.broadcast_request(request)
-
-        self.clients[websocket]["counter"] += 1
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
