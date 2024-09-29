@@ -191,17 +191,7 @@ class Server:
         try:
             await websocket.send(json.dumps(message))
         except Exception as e:
-            if websocket in self.clients:
-                self.clients.pop(websocket)
-                logging.info(f"{self.url} disconnects with client")
-
-            elif websocket in self.neighbour_websockets:
-                neighbour_url = self.neighbour_websockets[websocket]
-                self.neighbourhood.remove_active_server(neighbour_url)
-                logging.info(f"{self.url} disconnects with neighbour {neighbour_url}")
-
-            else:
-                logging.error(f"{self.url} failed to send response: {e}")
+            logging.error(f"{self.url} failed to send response: {e}")
 
     async def receive_server_hello(self, websocket, data):
         neighbour_url = data["sender"]
@@ -226,7 +216,7 @@ class Server:
         sender["counter"] = int(message["counter"]) + 1
         return True
 
-    async def get_websocket_from_fingerprint(self, fingerprint):
+    def get_websocket_from_fingerprint(self, fingerprint):
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
