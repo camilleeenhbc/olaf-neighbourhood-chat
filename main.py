@@ -1,6 +1,7 @@
 import sys
 import asyncio
 import logging
+import crypto
 from client import Client
 
 # logging.basicConfig(level=logging.ERROR)
@@ -43,6 +44,7 @@ async def handle_chat(client: Client):
         print("Error: Cannot found this client")
         return
 
+    recipient_fingerprint = crypto.generate_fingerprint(public_key)
     # Compose message
     message = await asyncio.to_thread(input, f"Compose message to {target_chat}: ")
 
@@ -53,6 +55,7 @@ async def handle_chat(client: Client):
         chat_type="chat",
         destination_servers=[address],
         recipient_public_keys=[public_key],
+        participants=[client.fingerprint, recipient_fingerprint],
     )
 
 
