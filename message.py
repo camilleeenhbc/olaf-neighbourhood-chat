@@ -19,7 +19,8 @@ class Message:
         self.message_type = message_type
 
     # Function to encrypt the AES key
-    def encrypt_key(self, receiver_public_key: rsa.RSAPublicKey, aes_key):
+    @staticmethod
+    def encrypt_key(receiver_public_key: rsa.RSAPublicKey, aes_key: bytes):
         encrypted_key = receiver_public_key.encrypt(
             aes_key,
             padding.OAEP(
@@ -31,8 +32,10 @@ class Message:
         return base64.b64encode(encrypted_key).decode()
 
     # Decrypt the AES key
-    def decrypt_key(self, aesKey):
-        return self.private_key.decrypt(
+    @staticmethod
+    def decrypt_key(private_key: rsa.RSAPrivateKey, aesKey: str):
+        aesKey = base64.b64decode(aesKey)
+        return private_key.decrypt(
             aesKey,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -54,19 +57,28 @@ class Message:
 
         cipher = Cipher(algorithms.AES(aes_key), modes.GCM(self.iv))
         encryptor = cipher.encryptor()
-        self.encrypted_content = encryptor.update(chat_data_json) + encryptor.finalize()
+        self.encrypted_content = (
+            encryptor.update(chat_data_json)
+            + encryptor.finalize()
+            + encryptor.tag  # Authentication tag in the last 128 bits
+        )
 
         for public_key in receiver_public_keys:
-            encrypted_aes_key = self.encrypt_key(public_key, aes_key)
+            encrypted_aes_key = Message.encrypt_key(public_key, aes_key)
             self.symm_keys.append(encrypted_aes_key)
 
     # Decrypt message with AES key
-    def decrypt_chat_message(self, key: bytes):
-        cipher = Cipher(algorithms.AES(key), modes.GCM(self.iv))
+    def decrypt_with_aes(self, private_key: rsa.RSAPrivateKey, key: str, iv):
+        key = Message.decrypt_key(private_key, key)
+
+        ciphertext = base64.b64decode(self.content)
+        content = ciphertext[:-16]
+        tag = ciphertext[-16:]
+
+        cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
         decryptor = cipher.decryptor()
-        decrypted_content = (
-            decryptor.update(self.encrypted_content.encode()) + decryptor.finalize()
-        )
+
+        decrypted_content = decryptor.update(content) + decryptor.finalize()
         return decrypted_content.decode()
 
     def prepare_chat_message(

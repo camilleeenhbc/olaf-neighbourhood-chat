@@ -250,9 +250,13 @@ class Client:
             chat: dict = message.get("chat", {})
             participants: list = chat.get("participants", [])
 
+            # Decrypt participants
+            for i, participant in enumerate(participants):
+                participants[i] = base64.b64decode(participant).decode()
+            logging.info(f"Participants: {participants}")
+
             # Get sender's public key from fingerprint
             sender_fingerprint = participants[0]  # sender's fingerprint comes first
-            sender_fingerprint = base64.b64decode(sender_fingerprint).decode()
             sender_public_key = await self.get_public_key_from_fingerprint(
                 sender_fingerprint
             )
@@ -268,9 +272,24 @@ class Client:
                 )
                 return
 
-            public_message = chat.get("message", "")
+            try:
+                recipient_index = participants.index(self.fingerprint)
+            except ValueError:
+                logging.error(
+                    f"Cannot find self in recipient fingerprints: {self.fingerprint}"
+                )
+                return
+
+            chat_message = chat.get("message", "")
+            iv = base64.b64decode(message.get("iv", ""))
+            symm_key = message.get("symm_keys", [])[recipient_index - 1]
+
+            chat_message = Message(chat_message).decrypt_with_aes(
+                self.private_key, symm_key, iv
+            )
+
             sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(private) {sender_username}: {public_message}")
+            logging.info(f"(private) {sender_username}: {chat_message}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 
