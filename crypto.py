@@ -46,11 +46,11 @@ def sign_message(message: str, counter, private_key: rsa.RSAPrivateKey):
 
 
 def verify_signature(
-    public_key: rsa.RSAPublicKey, signature, message_data: str, counter
+    public_key: rsa.RSAPublicKey, signature: str, message: str, counter
 ):
     try:
         # Verify signature using sender's public key and the original message data
-        message_bytes = message_data.encode() + str(counter).encode()
+        message_bytes = message.encode() + str(counter).encode()
         public_key.verify(
             base64.b64decode(signature),
             message_bytes,
@@ -61,5 +61,5 @@ def verify_signature(
             hashes.SHA256(),
         )
         return True
-    except InvalidSignature:
+    except Exception:
         return False

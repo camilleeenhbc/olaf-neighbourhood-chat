@@ -101,9 +101,9 @@ class Server:
             except websockets.ConnectionClosed as e:
                 logging.info("WebSocket connection closed: %s", e)
                 break
-            except Exception as e:
-                logging.error("Error in WebSocket connection: %s", e)
-                break
+            # except Exception as e:
+            #     logging.error("Error in WebSocket connection: %s", e)
+            #     break
 
         self.remove_websocket(websocket)
         await websocket.close()
@@ -146,23 +146,26 @@ class Server:
                 )
                 return
 
-            if websocket in self.clients:
-                public_key = self.clients[websocket]["public_key"]
-                public_key = crypto.load_pem_public_key(public_key)
-                if not crypto.verify_signature(
-                    public_key, signature, message_str, counter
-                ):
-                    logging.error(
-                        f"{self.url} message with invalid signature detected: {message}"
-                    )
-                    return
-
             data = message.get("data", None)
             if data is None:
                 logging.error(
                     f"{self.url}: Cannot find `data` field for this message: {message}"
                 )
                 return
+
+            if websocket in self.clients:
+                public_key = self.clients[websocket]["public_key"]
+                public_key = crypto.load_pem_public_key(public_key)
+                if not crypto.verify_signature(
+                    public_key, signature, json.dumps(data), counter
+                ):
+                    logging.error(
+                        f"{self.url} message with invalid signature detected: {message_str}"
+                    )
+                    return
+
+            if isinstance(data, str):
+                data = json.loads(data)
 
             message["data"] = data
 
@@ -214,11 +217,14 @@ class Server:
             logging.error(f"{self.url} message from unknown client detected")
             return False
 
-        if message["counter"] < sender["counter"]:
+        sender["counter"] = sender.get("counter", 0)
+
+        if int(message["counter"]) < int(sender["counter"]):
             logging.error(f"{self.url} message with replay attack detected")
             return False
 
-        sender["counter"] = message["counter"]
+        # Increment counter
+        sender["counter"] = int(message["counter"]) + 1
         return True
 
     async def send_private_message(self, chat_data):
@@ -294,7 +300,6 @@ class Server:
                 continue
 
             await self.neighbourhood.send_request(websocket, message)
-        self.clients[websocket]["counter"] += 1
 
     async def receive_hello(self, websocket, message):
         """Save client's public key and send client update to other servers"""
