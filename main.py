@@ -38,7 +38,12 @@ async def handle_chat(client: Client):
     # Choose chat participant
     target_chat = await asyncio.to_thread(input, "Choose participant: ")
 
-    index, address = target_chat.split("@")
+    try:
+        index, address = target_chat.split("@")
+    except:
+        print("Error: invalid recipient")
+        return
+
     public_key = client.get_public_key_from_username(target_chat)
     if public_key is None:
         print("Error: Cannot found this client")

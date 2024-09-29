@@ -249,7 +249,11 @@ class Server:
 
             participants = message["data"]["chat"]["participants"]
 
-            for fingerprint in participants:
+            for index, fingerprint in enumerate(participants):
+                # Skip the sender at index 0
+                if index == 0:
+                    continue
+
                 fingerprint = base64.b64decode(fingerprint).decode()
                 client_websocket = self.get_websocket_from_fingerprint(fingerprint)
                 if client_websocket is None:
@@ -262,6 +266,12 @@ class Server:
                 await self.send_response(client_websocket, message)
 
         else:
+            sender_fingerprint = message["data"]["chat"]["participants"][0]
+            sender_fingerprint = base64.b64decode(sender_fingerprint).decode()
+            client_websocket = self.get_websocket_from_fingerprint(sender_fingerprint)
+            if client_websocket is None:
+                logging.info(f"{self.url} cannot find sender websocket")
+
             # forward the message to destination servers
             for server_url in destination_servers:
                 websocket = self.neighbourhood.find_active_server(server_url)

@@ -44,7 +44,7 @@ class Message:
     # Encrypt message with AES key
     # Perform AES in GCM mode
     # Key length of 32 bytes (128 bits)
-    def encrypt_with_aes(self, receiver_public_keys):
+    def encrypt_with_aes(self, receiver_public_keys: List[rsa.RSAPublicKey]):
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
         aes_key = os.urandom(32)
@@ -70,7 +70,7 @@ class Message:
 
     def prepare_chat_message(
         self,
-        recipient_public_keys: rsa.RSAPublicKey,
+        recipient_public_keys: List[rsa.RSAPublicKey],
         destination_servers,
         participants: List[str] = [],
     ):
