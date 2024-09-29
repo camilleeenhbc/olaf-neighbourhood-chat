@@ -14,6 +14,8 @@ async def get_client_inputs(client: Client):
     print("users: Retrieve list of online users")
     print("chat: Chat with a person")
     print("public: Chat with the public")
+    print("upload: Upload file")
+    print("download: Download file")
     print("\n\n")
 
     choice = await asyncio.to_thread(input)
@@ -24,6 +26,10 @@ async def get_client_inputs(client: Client):
             await handle_chat(client)
         elif choice == "public":
             await handle_public_chat(client)
+        elif choice == "upload":
+            await handle_upload_file(client)
+        elif choice == "download":
+            await handle_download_file(client)
 
         choice = await asyncio.to_thread(input)
 
@@ -74,6 +80,18 @@ async def handle_public_chat(client: Client):
         message,
         chat_type="public_chat",
     )
+
+
+# Handle file upload
+async def handle_upload_file(client: Client):
+    file_path = await asyncio.to_thread(input, "Please enter file path: ")
+    await client.upload_file(file_path)
+
+
+# Handle file download
+async def handle_download_file(client: Client):
+    file_path = await asyncio.to_thread(input, "Please enter file name: ")
+    await client.download_file(file_path)
 
 
 async def main(client: Client):

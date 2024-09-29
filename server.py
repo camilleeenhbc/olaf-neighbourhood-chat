@@ -67,16 +67,16 @@ class Server:
             self._websocket_server = await websocket_server.serve(
                 self.listen, address, port
             )
-            await self.connect_to_neighbourhood()
-            await self.request_client_update()
-            await self._websocket_server.wait_closed()
+            # await self.connect_to_neighbourhood()
+            # await self.request_client_update()
+            # await self._websocket_server.wait_closed()
 
-            # await asyncio.gather(
-            #     self.start_http_server(address),  # Start the HTTP server
-            #     self.connect_to_neighbourhood(),  # Connect to neighbouring servers
-            #     self.request_client_update(),
-            #     self._websocket_server.wait_closed(),  # Request client updates
-            # )
+            await asyncio.gather(
+                self.start_http_server(address),  # Start the HTTP server
+                self.connect_to_neighbourhood(),  # Connect to neighbouring servers
+                self.request_client_update(),
+                self._websocket_server.wait_closed(),  # Request client updates
+            )
         except Exception as e:
             logging.error(f"Error occurred in server: {e}")
             await self.stop()
