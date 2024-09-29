@@ -1,27 +1,16 @@
 import logging
 import sys
 import json
+import os
+import crypto
+import base64
 import asyncio
-import hashlib
 import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
 from aiohttp import web
-import os
-import crypto
-
-
-import base64
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
 
 from neighbourhood import Neighbourhood
-from crypto import Crypto
 from message import Message
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
@@ -275,25 +264,25 @@ class Server:
             iv = message["data"].get("iv")
             symm_keys = message["data"].get("symm_keys")
             encrypted_chat = message["data"].get("chat")
-             # decode fingerprints
+            # decode fingerprints
             participants_b64 = encrypted_chat["participants"]
             participants = [base64.b64decode(fp).decode() for fp in participants_b64]
 
             # send message to each participant
             for i, encrypted_aes_key in enumerate(symm_keys):
                 # decrypt the AES key using the server's private key
-                aes_key = message.decrypt_key(encrypted_aes_key)  
+                aes_key = message.decrypt_key(encrypted_aes_key)
 
                 # decrypt message using AES key
-                decrypted_message = message.decrypt_with_aes(aes_key, iv, encrypted_chat["message"])
+                decrypted_message = message.decrypt_with_aes(
+                    aes_key, iv, encrypted_chat["message"]
+                )
 
                 # send message
-                recipient_fingerprint = participants[i]  
+                recipient_fingerprint = participants[i]
                 await self.send_private_message(recipient_fingerprint, message)
 
-            logging.info(
-                f"{self.url} receives chat as the destination server:\n"
-            )
+            logging.info(f"{self.url} receives chat as the destination server:\n")
         else:
             logging.info(f"{self.url} not in destination servers. Message ignored.")
 
