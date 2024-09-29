@@ -48,19 +48,8 @@ class Client:
                     return public_key
         return None
 
-    # SIGNATURE
-    # Sign the message using the RSA-PSS scheme
-    # Signature should be Base64 of data + counter
-    def sign_message(self, message):
-        message_bytes = message + str(self.counter).encode()
-        signature = self.private_key.sign(
-            message_bytes,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256(),
-        )
-        self.signature = base64.b64encode(signature).decode()
+    def sign_message(self, message: str):
+        self.signature = crypto.sign_message(message, self.counter, self.private_key)
         return self.signature
 
     # CONNECT TO SERVER
@@ -135,14 +124,12 @@ class Client:
 
         # Inrement counter
         self.counter += 1
-        # Sign message
-        chat_message_bytes = json.dumps(message_data).encode()
 
         signed_message = {
             "type": "signed_data",
             "data": message_data,
             "counter": self.counter,
-            "signature": self.sign_message(chat_message_bytes),
+            "signature": self.sign_message(json.dumps(message_data)),
         }
 
         await websocket.send(json.dumps(signed_message))
@@ -185,7 +172,8 @@ class Client:
             # Transform public key string to public key object
             client_public_keys = []
             for client in clients:
-                client_public_keys.append(crypto.load_pem_public_key(client))
+                public_key = crypto.load_pem_public_key(client)
+                client_public_keys.append(public_key)
 
             self.online_users[server_address] = client_public_keys
             for i in range(len(clients)):
