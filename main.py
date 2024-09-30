@@ -45,23 +45,41 @@ async def handle_online_users(client: Client):
 
 
 async def handle_chat(client: Client):
-    # Choose chat participant
-    target_chat = await prompt_input("Choose participant: ")
-
+    num_participants = await prompt_input("Number of participants (exclude you): ")
     try:
-        index, address = target_chat.split("@")
-    except:
-        print("Error: invalid recipient")
+        num_participants = int(num_participants)
+    except Exception:
+        print("Error: invalid input")
         return
 
-    public_key = client.get_public_key_from_username(target_chat)
-    if public_key is None:
-        print("Error: Cannot found this client")
+    if num_participants <= 0:
+        print("Error: invalid input")
         return
 
-    recipient_fingerprint = crypto.generate_fingerprint(public_key)
+    # Choose chat participants
+    public_keys = []
+    fingerprints = [client.fingerprint]
+    for i in range(num_participants):
+        recipient = await prompt_input(f"Participant #{i+1}: ")
+
+        try:
+            _, address = recipient.split("@")
+        except Exception:
+            print("Error: invalid recipient")
+            return
+
+        public_key = client.get_public_key_from_username(recipient)
+        if public_key is None:
+            print("Error: Cannot found this client")
+            return
+
+        recipient_fingerprint = crypto.generate_fingerprint(public_key)
+
+        public_keys.append(public_key)
+        fingerprints.append(recipient_fingerprint)
+
     # Compose message
-    message = await prompt_input(f"Compose message to {target_chat}: ")
+    message = await prompt_input("Message: ")
 
     # Chat
     await client.send_message(
@@ -69,8 +87,8 @@ async def handle_chat(client: Client):
         message,
         chat_type="chat",
         destination_servers=[address],
-        recipient_public_keys=[public_key],
-        participants=[client.fingerprint, recipient_fingerprint],
+        recipient_public_keys=public_keys,
+        participants=fingerprints,
     )
 
 
