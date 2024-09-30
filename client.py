@@ -66,6 +66,8 @@ class Client:
             logging.info("Disconnected")
         except Exception as e:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
+        finally:
+            await self.disconnect()
 
     async def disconnect(self):
         """Disconnect client from server"""
@@ -247,12 +249,28 @@ class Client:
         and logs the message if the signature is valid.
         """
         try:
-            chat: dict = message.get("chat", {})
+            encrypted_chat: dict = message.get("chat", {})
+            iv = base64.b64decode(message.get("iv", ""))
+            symm_keys = message.get("symm_keys", [])
+
+            # Try decrypting chat message
+            chat = None
+            for symm_key in symm_keys:
+                chat = Message(encrypted_chat).decrypt_with_aes(
+                    self.private_key, symm_key, iv
+                )
+                if chat is not None:
+                    break
+            
+            # If chat cannot be encrypted, ignore because the message isn't for this client
+            if chat is None:
+                return
+
+            chat = json.loads(chat)
             participants: list = chat.get("participants", [])
 
             # Get sender's public key from fingerprint
             sender_fingerprint = participants[0]  # sender's fingerprint comes first
-            sender_fingerprint = base64.b64decode(sender_fingerprint).decode()
             sender_public_key = await self.get_public_key_from_fingerprint(
                 sender_fingerprint
             )
@@ -268,9 +286,8 @@ class Client:
                 )
                 return
 
-            public_message = chat.get("message", "")
             sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(private) {sender_username}: {public_message}")
+            logging.info(f"(private) {sender_username}: {chat["message"]}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 
