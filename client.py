@@ -7,6 +7,7 @@ import logging
 import crypto
 import aiohttp
 import base64
+import threading
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -34,6 +35,8 @@ class Client:
 
         # List of currently online users { server_address1: [client public key 1, client public key 2, ...] }
         self.online_users = {}
+
+        self.client_list_event = threading.Event()
 
     async def get_public_key_from_fingerprint(
         self, fingerprint: str
@@ -140,6 +143,7 @@ class Client:
         logging.info(f"Sent {chat_type} message.")
 
     async def request_client_list(self):
+        self.client_list_event.clear()
         request = {
             "type": "client_list_request",
         }
@@ -159,30 +163,21 @@ class Client:
             logging.error(f"Invalid message: {data}")
 
     def handle_client_list(self, data):
-        logging.info("Client receives client_list")
-
         servers = data.get("servers", None)
-        # print(servers)
         if servers is None:
             logging.error("Invalid client_list format")
             return
-
-        log = "List of online users:\n"
 
         for item in servers:
             server_address, clients = item["address"], item["clients"]
 
             # Transform public key string to public key object
-            client_public_keys = []
-            for public_key in clients:
+            self.online_users[server_address] = []
+            for i, public_key in enumerate(clients):
                 public_key = crypto.load_pem_public_key(public_key)
-                client_public_keys.append(public_key)
+                self.online_users[server_address].append(public_key)
 
-            self.online_users[server_address] = client_public_keys
-            for i in range(len(clients)):
-                log += f"- {i}@{server_address}\n"
-
-        logging.info(log)
+        self.client_list_event.set()
 
     async def handle_signed_data(self, data):
         """Handle and verify signed_data messages"""
@@ -212,7 +207,7 @@ class Client:
         index = int(index)
         try:
             return self.online_users[address][index]
-        except:
+        except Exception:
             return None
 
     async def handle_public_chat(self, signature: str, message: dict, counter):
