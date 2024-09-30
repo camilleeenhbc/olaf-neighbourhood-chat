@@ -173,14 +173,13 @@ class Client:
             server_address, clients = item["address"], item["clients"]
 
             # Transform public key string to public key object
-            client_public_keys = []
-            for public_key in clients:
+            self.online_users[server_address] = []
+            for i, public_key in enumerate(clients):
                 public_key = crypto.load_pem_public_key(public_key)
-                client_public_keys.append(public_key)
+                self.online_users[server_address].append(public_key)
 
-            self.online_users[server_address] = client_public_keys
-            for i in range(len(clients)):
-                log += f"- {i}@{server_address}\n"
+                username = f"{i}@{server_address}"
+                log += f"- {username} {"(you)" if public_key == self.public_key else ""}\n"
 
         logging.info(log)
 
@@ -210,10 +209,7 @@ class Client:
         """Get public key from username in the format of index@server_address"""
         index, address = username.split("@")
         index = int(index)
-        try:
-            return self.online_users[address][index]
-        except:
-            return None
+        return self.online_users.get(address, {}).get(index, None)
 
     async def handle_public_chat(self, signature: str, message: dict, counter):
         """
