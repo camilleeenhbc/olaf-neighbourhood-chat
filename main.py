@@ -8,6 +8,10 @@ from client import Client
 # logging.disable()
 
 
+async def prompt_input(prompt=""):
+    return await asyncio.to_thread(input, prompt)
+
+
 async def get_client_inputs(client: Client):
     print("INSTRUCTION")
     print("q: Quit")
@@ -18,7 +22,7 @@ async def get_client_inputs(client: Client):
     print("download: Download file")
     print("\n\n")
 
-    choice = await asyncio.to_thread(input)
+    choice = await prompt_input()
     while choice != "q":
         if choice == "users":
             await handle_online_users(client)
@@ -31,7 +35,7 @@ async def get_client_inputs(client: Client):
         elif choice == "download":
             await handle_download_file(client)
 
-        choice = await asyncio.to_thread(input)
+        choice = await prompt_input()
 
     await client.disconnect()
 
@@ -42,7 +46,7 @@ async def handle_online_users(client: Client):
 
 async def handle_chat(client: Client):
     # Choose chat participant
-    target_chat = await asyncio.to_thread(input, "Choose participant: ")
+    target_chat = await prompt_input("Choose participant: ")
 
     try:
         index, address = target_chat.split("@")
@@ -57,7 +61,7 @@ async def handle_chat(client: Client):
 
     recipient_fingerprint = crypto.generate_fingerprint(public_key)
     # Compose message
-    message = await asyncio.to_thread(input, f"Compose message to {target_chat}: ")
+    message = await prompt_input(f"Compose message to {target_chat}: ")
 
     # Chat
     await client.send_message(
@@ -72,7 +76,7 @@ async def handle_chat(client: Client):
 
 async def handle_public_chat(client: Client):
     # Compose message
-    message = await asyncio.to_thread(input, "Compose message for public chat: ")
+    message = await prompt_input("Compose message for public chat: ")
 
     # Send public chat
     await client.send_message(
@@ -84,13 +88,13 @@ async def handle_public_chat(client: Client):
 
 # Handle file upload
 async def handle_upload_file(client: Client):
-    file_path = await asyncio.to_thread(input, "Please enter file path: ")
+    file_path = await prompt_input("Please enter file path: ")
     await client.upload_file(file_path)
 
 
 # Handle file download
 async def handle_download_file(client: Client):
-    file_path = await asyncio.to_thread(input, "Please enter file name: ")
+    file_path = await prompt_input("Please enter file name: ")
     await client.download_file(file_path)
 
 
