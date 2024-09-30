@@ -18,6 +18,7 @@ logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 UPLOAD_DIRECTORY = "files"
 if not os.path.exists(UPLOAD_DIRECTORY):
     os.makedirs(UPLOAD_DIRECTORY)
+MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 class Server:
@@ -253,31 +254,10 @@ class Server:
         if self.url in destination_servers:
             logging.info(f"{self.url} receives chat as the destination server")
 
-            participants = message["data"]["chat"]["participants"]
-
-            for index, fingerprint in enumerate(participants):
-                # Skip the sender at index 0
-                if index == 0:
-                    continue
-
-                fingerprint = base64.b64decode(fingerprint).decode()
-                client_websocket = self.get_websocket_from_fingerprint(fingerprint)
-                if client_websocket is None:
-                    logging.error(
-                        f"{self.url} can't find client websocket for private chat"
-                    )
-                    continue
-
-                logging.info(f"{self.url} sends private chat to client")
+            for client_websocket in self.clients:
                 await self.send_response(client_websocket, message)
 
         else:
-            sender_fingerprint = message["data"]["chat"]["participants"][0]
-            sender_fingerprint = base64.b64decode(sender_fingerprint).decode()
-            client_websocket = self.get_websocket_from_fingerprint(sender_fingerprint)
-            if client_websocket is None:
-                logging.info(f"{self.url} cannot find sender websocket")
-
             # forward the message to destination servers
             for server_url in destination_servers:
                 websocket = self.neighbourhood.find_active_server(server_url)
@@ -413,9 +393,9 @@ class Server:
 
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, address, 1000)  # HTTP server on port 1000
+        site = web.TCPSite(runner, address, 443)  # HTTP server on port 1000
         await site.start()
-        logging.info(f"HTTP server started on http://{address}:1000")
+        logging.info(f"HTTP server started on http://{address}:443")
 
     async def handle_file_upload(self, request):
         """Handle file upload via HTTP POST"""
@@ -428,17 +408,27 @@ class Server:
             filename = field.filename
             file_path = os.path.join(UPLOAD_DIRECTORY, filename)
 
+            size = 0
             # Write the file to the server's upload directory
             with open(file_path, "wb") as f:
                 while True:
                     chunk = await field.read_chunk()  # Read the file chunk by chunk
                     if not chunk:
                         break
+
+                    # Check file size
+                    size += len(chunk)
+                    if size > MAX_FILE_SIZE:
+                        return web.Response(
+                            status=413, text="File size exceeds the limit."
+                        )
+
                     f.write(chunk)
 
             logging.info(f"File {filename} saved at {file_path}")
-            return web.Response(text=f"File {filename} uploaded successfully.")
 
+            file_url = f"{request.url.scheme}://{request.url.host}:{request.url.port}/files/{filename}"
+            return web.json_response({"body": {"file_url": file_url}})
         return web.Response(status=400, text="No file found in request.")
 
     async def handle_download(self, request):
