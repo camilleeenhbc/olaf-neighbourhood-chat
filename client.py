@@ -52,6 +52,28 @@ class Client:
                     return public_key
         return None
 
+    async def get_public_keys_from_fingerprints(
+        self, fingerprints: List[str]
+    ) -> List[rsa.RSAPublicKey]:
+        """
+        Retrieve a public key using the sender's fingerprint from the online users list.
+        """
+        await self.request_client_list()  # Fetch online users
+        public_keys = [None] * len(fingerprints)
+        if self.fingerprint in fingerprints:
+            public_keys[fingerprints.index(self.fingerprint)] = self.public_key
+
+        for clients in self.online_users.values():
+            for public_key in clients:
+                client_fingerprint = crypto.generate_fingerprint(public_key)
+                if client_fingerprint in fingerprints:
+                    public_keys[fingerprints.index(client_fingerprint)] = public_key
+
+        if None in public_keys:
+            return []
+
+        return public_keys
+
     def sign_message(self, message: str):
         self.signature = crypto.sign_message(message, self.counter, self.private_key)
         return self.signature
@@ -265,10 +287,12 @@ class Client:
             participants: list = chat.get("participants", [])
 
             # Get sender's public key from fingerprint
-            sender_fingerprint = participants[0]  # sender's fingerprint comes first
-            sender_public_key = await self.get_public_key_from_fingerprint(
-                sender_fingerprint
-            )
+            public_keys = await self.get_public_keys_from_fingerprints(participants)
+            if len(public_keys) == 0:
+                logging.error("Cannot get public keys for every participants")
+                return
+
+            sender_public_key = public_keys[0]
             if sender_public_key is None:
                 logging.error("Cannot get public key from chat sender")
                 return
@@ -276,9 +300,7 @@ class Client:
             if crypto.verify_signature(
                 sender_public_key, signature, json.dumps(message), counter
             ):
-                logging.error(
-                    f"Signature verification failed for sender: {sender_fingerprint}"
-                )
+                logging.error("Signature verification failed for sender")
                 return
 
             sender_username = self.get_username_from_public_key(sender_public_key)
