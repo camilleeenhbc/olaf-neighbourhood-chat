@@ -159,8 +159,6 @@ class Client:
             logging.error(f"Invalid message: {data}")
 
     def handle_client_list(self, data):
-        logging.info("Client receives client_list")
-
         servers = data.get("servers", None)
         # print(servers)
         if servers is None:
@@ -209,7 +207,11 @@ class Client:
         """Get public key from username in the format of index@server_address"""
         index, address = username.split("@")
         index = int(index)
-        return self.online_users.get(address, {}).get(index, None)
+        try:
+            return self.online_users[address][index]
+        except Exception:
+            return None
+
 
     async def handle_public_chat(self, signature: str, message: dict, counter):
         """
