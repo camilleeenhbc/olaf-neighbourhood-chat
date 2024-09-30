@@ -66,6 +66,8 @@ class Client:
             logging.info("Disconnected")
         except Exception as e:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
+        finally:
+            await self.disconnect()
 
     async def disconnect(self):
         """Disconnect client from server"""
@@ -247,9 +249,27 @@ class Client:
         and logs the message if the signature is valid.
         """
         try:
-            chat: dict = message.get("chat", {})
-            participants: list = chat.get("participants", [])
+            logging.info("receives a private chat")
+            encrypted_chat: dict = message.get("chat", {})
+            iv = base64.b64decode(message.get("iv", ""))
+            symm_keys = message.get("symm_keys", [])
 
+            # Try decrypting chat message
+            chat = None
+            for symm_key in symm_keys:
+                chat = Message(encrypted_chat).decrypt_with_aes(
+                    self.private_key, symm_key, iv
+                )
+                if chat is not None:
+                    break
+            
+            # If chat cannot be encrypted, ignore because the message isn't for this client
+            if chat is None:
+                return
+
+            chat = json.loads(chat)
+            logging.info(chat)
+            participants: list = chat.get("participants", [])
             # Decrypt participants
             for i, participant in enumerate(participants):
                 participants[i] = base64.b64decode(participant).decode()
@@ -272,24 +292,8 @@ class Client:
                 )
                 return
 
-            try:
-                recipient_index = participants.index(self.fingerprint)
-            except ValueError:
-                logging.error(
-                    f"Cannot find self in recipient fingerprints: {self.fingerprint}"
-                )
-                return
-
-            chat_message = chat.get("message", "")
-            iv = base64.b64decode(message.get("iv", ""))
-            symm_key = message.get("symm_keys", [])[recipient_index - 1]
-
-            chat_message = Message(chat_message).decrypt_with_aes(
-                self.private_key, symm_key, iv
-            )
-
             sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(private) {sender_username}: {chat_message}")
+            logging.info(f"(private) {sender_username}: {chat["message"]}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 

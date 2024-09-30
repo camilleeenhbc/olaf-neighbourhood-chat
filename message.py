@@ -69,17 +69,20 @@ class Message:
 
     # Decrypt message with AES key
     def decrypt_with_aes(self, private_key: rsa.RSAPrivateKey, key: str, iv):
-        key = Message.decrypt_key(private_key, key)
+        try:
+            key = Message.decrypt_key(private_key, key)
 
-        ciphertext = base64.b64decode(self.content)
-        content = ciphertext[:-16]
-        tag = ciphertext[-16:]
+            ciphertext = base64.b64decode(self.content)
+            content = ciphertext[:-16]
+            tag = ciphertext[-16:]
 
-        cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
-        decryptor = cipher.decryptor()
+            cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
+            decryptor = cipher.decryptor()
 
-        decrypted_content = decryptor.update(content) + decryptor.finalize()
-        return decrypted_content.decode()
+            decrypted_content = decryptor.update(content) + decryptor.finalize()
+            return decrypted_content.decode()
+        except Exception:
+            return None
 
     def prepare_chat_message(
         self,
