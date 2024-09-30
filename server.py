@@ -73,7 +73,7 @@ class Server:
             # await self._websocket_server.wait_closed()
 
             await asyncio.gather(
-                self.start_http_server(address),  # Start the HTTP server
+                # self.start_http_server(address),  # Start the HTTP server
                 self.connect_to_neighbourhood(),  # Connect to neighbouring servers
                 self.request_client_update(),
                 self._websocket_server.wait_closed(),  # Request client updates
@@ -106,10 +106,10 @@ class Server:
             #     logging.error("Error in WebSocket connection: %s", e)
             #     break
 
-        self.remove_websocket(websocket)
+        await self.remove_websocket(websocket)
         await websocket.close()
 
-    def remove_websocket(self, websocket):
+    async def remove_websocket(self, websocket):
         """Remove websocket from server/neighbourhood states"""
         if websocket in self.neighbour_websockets:
             neighbour_url = self.neighbour_websockets.pop(websocket)
@@ -118,6 +118,7 @@ class Server:
         elif websocket in self.clients:
             self.clients.pop(websocket)
             logging.info(f"{self.url} removes client")
+            await self.send_client_update()
 
     async def handle_message(
         self, websocket: websocket_server.ServerConnection, message_str
