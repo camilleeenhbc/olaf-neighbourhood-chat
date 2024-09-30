@@ -261,7 +261,7 @@ class Client:
                 )
                 if chat is not None:
                     break
-            
+
             # If chat cannot be encrypted, ignore because the message isn't for this client
             if chat is None:
                 return
@@ -287,7 +287,7 @@ class Client:
                 return
 
             sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(private) {sender_username}: {chat["message"]}")
+            logging.info(f"(private) {sender_username}: {chat.get('message', '')}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 

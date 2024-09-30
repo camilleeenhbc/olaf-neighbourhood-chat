@@ -18,6 +18,7 @@ logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 UPLOAD_DIRECTORY = "files"
 if not os.path.exists(UPLOAD_DIRECTORY):
     os.makedirs(UPLOAD_DIRECTORY)
+MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 class Server:
@@ -386,9 +387,9 @@ class Server:
 
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, address, 1000)  # HTTP server on port 1000
+        site = web.TCPSite(runner, address, 443)  # HTTP server on port 1000
         await site.start()
-        logging.info(f"HTTP server started on http://{address}:1000")
+        logging.info(f"HTTP server started on http://{address}:443")
 
     async def handle_file_upload(self, request):
         """Handle file upload via HTTP POST"""
@@ -401,17 +402,27 @@ class Server:
             filename = field.filename
             file_path = os.path.join(UPLOAD_DIRECTORY, filename)
 
+            size = 0
             # Write the file to the server's upload directory
             with open(file_path, "wb") as f:
                 while True:
                     chunk = await field.read_chunk()  # Read the file chunk by chunk
                     if not chunk:
                         break
+
+                    # Check file size
+                    size += len(chunk)
+                    if size > MAX_FILE_SIZE:
+                        return web.Response(
+                            status=413, text="File size exceeds the limit."
+                        )
+
                     f.write(chunk)
 
             logging.info(f"File {filename} saved at {file_path}")
-            return web.Response(text=f"File {filename} uploaded successfully.")
 
+            file_url = f"{request.url.scheme}://{request.url.host}:{request.url.port}/files/{filename}"
+            return web.json_response({"body": {"file_url": file_url}})
         return web.Response(status=400, text="No file found in request.")
 
     async def handle_download(self, request):
