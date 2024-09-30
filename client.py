@@ -303,8 +303,14 @@ class Client:
                 logging.error("Signature verification failed for sender")
                 return
 
-            sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(private) {sender_username}: {chat.get('message', '')}")
+            usernames = []
+            for public_key in public_keys:
+                if public_key == self.public_key:
+                    usernames.append("you")
+                else:
+                    usernames.append(self.get_username_from_public_key(public_key))
+
+            logging.info(f"({", ".join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 
