@@ -227,15 +227,15 @@ class Client:
                 logging.error("Cannot get public key from public chat sender")
                 return
 
+            public_message = message.get("message", "")
             if crypto.verify_signature(
-                sender_public_key, signature, json.dumps(message), counter
+                sender_public_key, signature, json.dumps(public_message), counter
             ):
                 logging.error(
                     f"Signature verification failed for sender: {sender_fingerprint}"
                 )
                 return
 
-            public_message = message.get("message", "")
             sender_username = self.get_username_from_public_key(sender_public_key)
             logging.info(f"(public chat) {sender_username}: {public_message}")
         except Exception as e:
@@ -277,31 +277,35 @@ class Client:
     async def upload_file(self, filename):
         """Upload a file to the server using an HTTP POST request"""
         logging.info(f"Uploading file {filename}")
-        url = f"http://localhost:1000/upload"
-        try:
-            async with aiohttp.ClientSession() as session:
-                with open(filename, "rb") as f:
-                    files = {"file": f}
-                    logging.info(f"Uploading file {filename}")
+        url = f"http://localhost:443/upload"
+        async with aiohttp.ClientSession() as session:
+            with open(filename, "rb") as f:
+                files = {"file": f}
+                logging.info(f"Uploading file {filename}")
 
-                    # POST request
-                    async with session.post(url, data=files) as response:
-                        if response.status == 200:
-                            logging.info(f"File {filename} uploaded successfully.")
-                        else:
-                            logging.error(
-                                f"Failed to upload file {filename}. Status: {response.status}"
-                            )
-        except aiohttp.ClientError as e:
-            logging.error(f"Error during file upload: {e}")
-        except KeyboardInterrupt:
-            logging.warning("Upload interrupted by user.")
-        finally:
-            logging.info("Upload process cleaned up.")
+                # POST request
+                async with session.post(url, data=files) as response:
+                    if response.status == 200:
+                        json_response = await response.json()
+                        logging.info(
+                            f"File uploaded successfully. File URL: {json_response['body']['file_url']}"
+                        )
+                        return json_response["body"]["file_url"]
+                    elif response.status == 413:
+                        logging.error(
+                            f"File too large. Server returned 413 Payload Too Large."
+                        )
+                    else:
+                        logging.error(
+                            f"Failed to upload file. Status code: {response.status}"
+                        )
+                        logging.error(await response.text())
+
+            return None
 
     async def download_file(self, filename):
         """Download a file from the aiohttp server asynchronously."""
-        url = f"http://localhost:1000/download/{filename}"
+        url = f"http://localhost:443/download/{filename}"
 
         try:
             # Create a new aiohttp session
