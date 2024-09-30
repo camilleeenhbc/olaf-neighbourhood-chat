@@ -46,11 +46,11 @@ class Message:
 
     # Encrypt message with AES key
     # Perform AES in GCM mode
-    # Key length of 32 bytes (128 bits)
+    # Key length of 16 bytes (128 bits)
     def encrypt_chat_message(self, receiver_public_keys):
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
-        aes_key = os.urandom(32)
+        aes_key = os.urandom(16)
 
         chat_data = {"participants": self.participants, "message": self.content}
         chat_data_json = json.dumps(chat_data).encode()
