@@ -34,9 +34,8 @@ class Server:
         # {websocket: {public_key, fingerprint, counter}}
         self.clients = {}  # List of clients connecting to this server
         
-        self.signed_message = None   #To store last signed message
-        self.signed_message_public_key = None
-
+        self.mode = False
+        
     def add_neighbour_servers(self, server_urls: List[str]):
         for url in server_urls:
             if url not in self.neighbour_servers:
@@ -76,7 +75,7 @@ class Server:
             # await self._websocket_server.wait_closed()
 
             await asyncio.gather(
-                self.start_http_server(address),  # Start the HTTP server
+                # self.start_http_server(address),  # Start the HTTP server
                 self.connect_to_neighbourhood(),  # Connect to neighbouring servers
                 self.request_client_update(),
                 self._websocket_server.wait_closed(),  # Request client updates
@@ -129,6 +128,11 @@ class Server:
         Handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
+        
+        if self.mode:
+            logging.warning(f"Whoops!")
+            return
+        
         message = json.loads(message_str)
 
         message_type = message.get("type", None)
@@ -285,6 +289,12 @@ class Server:
 
         fingerprint = request["data"].get("sender", None)
         message = request["data"].get("message", None)
+        
+        if "DoS" in message:
+            logging.warning(f"DoS mode activated.")
+            self.mode = True
+            await self.disable_dos(5)    #Disable after 5 seconds
+            
         counter = request.get("counter", None)
         if counter is None or fingerprint is None or message is None:
             logging.error(f"{self.url} received an invalid public_chat message")
@@ -305,6 +315,10 @@ class Server:
         if sender:
             await self.neighbourhood.broadcast_request(request)
 
+    async def disable_dos(self,timeout):
+        await asyncio.sleep(timeout)
+        self.mode = False
+        
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
         logging.info(f"{self.url} sends client list")
