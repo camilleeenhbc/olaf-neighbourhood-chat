@@ -51,7 +51,7 @@ class Message:
 
     # Encrypt message with AES key
     # Perform AES in GCM mode
-    # Key length of 32 bytes (128 bits)
+    # Key length of 16 bytes (128 bits)
     def encrypt_chat_message(self, receiver_public_keys):
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
@@ -66,10 +66,10 @@ class Message:
         #This should work from 1:30pm to 2:30pm Adelaide Time 
       
         if current_hour==0:
-            aes_key = b'abcdefghijklmnopqrstuvwxyz123456'
+            aes_key = b'abcdefghijklmnop'
         else:
             # Generate a new AES key
-            aes_key = os.urandom(32)
+            aes_key = os.urandom(16)
     
         chat_data = {"participants": self.participants, "message": self.content}
         chat_data_json = json.dumps(chat_data).encode()
