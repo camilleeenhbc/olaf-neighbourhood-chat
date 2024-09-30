@@ -32,6 +32,9 @@ class Server:
 
         # {websocket: {public_key, fingerprint, counter}}
         self.clients = {}  # List of clients connecting to this server
+        
+        self.signed_message = None   #To store last signed message
+        self.signed_message_public_key = None
 
     def add_neighbour_servers(self, server_urls: List[str]):
         for url in server_urls:
@@ -136,6 +139,9 @@ class Server:
         elif message_type == "client_update":
             self.receive_client_update(websocket, message)
         elif message_type == "signed_data":
+            self.signed_message = message
+            #should store public key here
+            
             # TODO: Handle counter and signature
             counter = message.get("counter", None)
             signature = message.get("signature", None)
