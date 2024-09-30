@@ -1,17 +1,17 @@
 import json
-import base64
 import os
+from typing import List, Optional
 import websockets
 import asyncio
 import logging
-import hashlib
-from websockets import connect
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.backends import default_backend
-from cryptography.exceptions import InvalidSignature
-from message import Message
+import crypto
 import aiohttp
+import base64
+from websockets import connect
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+from message import Message
+
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
@@ -25,75 +25,33 @@ class Client:
             key_size=2048,  # modulus length
             backend=default_backend(),
         )
-        self.public_key = self.private_key.public_key()
-        self.fingerprint = self.generate_fingerprint(self.public_key)
+        self.public_key = crypto.load_pem_public_key(
+            crypto.export_public_key(self.private_key.public_key())
+        )
+
+        self.fingerprint = crypto.generate_fingerprint(self.public_key)
         self.websocket = None
 
         # List of currently online users { server_address1: [client public key 1, client public key 2, ...] }
         self.online_users = {}
 
-    def generate_fingerprint(self, public_key):
-        """Generates a fingerprint based on the public key (hash)."""
-        public_bytes = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(public_bytes).hexdigest()
-
-    async def get_public_key_from_fingerprint(self, fingerprint):
+    async def get_public_key_from_fingerprint(
+        self, fingerprint: str
+    ) -> Optional[rsa.RSAPublicKey]:
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
         await self.request_client_list()  # Fetch online users
         for server, clients in self.online_users.items():
-            for client in clients:
-                # Assuming the client entry contains the public key in PEM format
-                public_key_pem = client
-                public_key = serialization.load_pem_public_key(
-                    public_key_pem.encode(), backend=default_backend()
-                )
-                client_fingerprint = self.generate_fingerprint(public_key)
+            for public_key in clients:
+                client_fingerprint = crypto.generate_fingerprint(public_key)
                 if client_fingerprint == fingerprint:
                     return public_key
         return None
 
-    def export_public_key(self):
-        """Export the public key to PEM format"""
-        return self.public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-
-    # SIGNATURE
-    # Sign the message using the RSA-PSS scheme
-    # Signature should be Base64 of data + counter
-    def sign_message(self, message):
-        signature = self.private_key.sign(
-            message,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256(),
-        )
-        self.signature = base64.b64encode(signature).decode()
+    def sign_message(self, message: str):
+        self.signature = crypto.sign_message(message, self.counter, self.private_key)
         return self.signature
-
-    def verify_signature(self, public_key, signature, message_data):
-        try:
-            # Verify signature using sender's public key and the original message data
-            public_key.verify(
-                base64.b64decode(signature),
-                message_data.encode(),
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH,
-                ),
-                hashes.SHA256(),
-            )
-            return True
-        except InvalidSignature:
-            logging.error("Invalid signature.")
-            return False
 
     # CONNECT TO SERVER
     async def connect_to_server(self):
@@ -131,7 +89,7 @@ class Client:
         message_content="",
         chat_type="chat",
         destination_servers=[],
-        recipient_public_keys=[],
+        recipient_public_keys: List[rsa.RSAPublicKey] = [],
         participants=[],
     ):
         """
@@ -141,7 +99,9 @@ class Client:
         if chat_type == "hello":
             message_data = {
                 "type": "hello",
-                "public_key": self.export_public_key().decode(),  # Exporting public key as PEM format
+                "public_key": crypto.export_public_key(
+                    self.public_key
+                ),  # Exporting public key as PEM format
             }
 
         elif chat_type == "chat":  # Private chat
@@ -163,13 +123,14 @@ class Client:
             logging.error("Invalid chat type specified.")
             return
 
-        # Sign message
-        chat_message_bytes = json.dumps(message_data).encode()
+        # Inrement counter
+        self.counter += 1
+
         signed_message = {
             "type": "signed_data",
             "data": message_data,
             "counter": self.counter,
-            "signature": self.sign_message(chat_message_bytes),
+            "signature": self.sign_message(json.dumps(message_data)),
         }
 
         await websocket.send(json.dumps(signed_message))
@@ -208,7 +169,14 @@ class Client:
 
         for item in servers:
             server_address, clients = item["address"], item["clients"]
-            self.online_users[server_address] = clients
+
+            # Transform public key string to public key object
+            client_public_keys = []
+            for public_key in clients:
+                public_key = crypto.load_pem_public_key(public_key)
+                client_public_keys.append(public_key)
+
+            self.online_users[server_address] = client_public_keys
             for i in range(len(clients)):
                 log += f"- {i}@{server_address}\n"
 
@@ -222,44 +190,106 @@ class Client:
 
         message_type = message_data.get("type", None)
         if message_type == "public_chat":
-            await self.handle_public_chat(signature, message_data)
+            await self.handle_public_chat(signature, message_data, counter)
         elif message_type == "chat":
-            await self.handle_chat(signature, message_data)
+            await self.handle_chat(signature, message_data, counter)
         else:
             logging.error("Invalid message type")
 
-    async def handle_public_chat(self, signature, message):
+    def get_username_from_public_key(self, public_key):
+        """Get username from public key in the format of index@server_address"""
+        for server_address, clients in self.online_users.items():
+            if public_key in clients:
+                index = clients.index(public_key)
+                return f"{index}@{server_address}"
+        return None
+
+    def get_public_key_from_username(self, username: str):
+        """Get public key from username in the format of index@server_address"""
+        index, address = username.split("@")
+        index = int(index)
+        try:
+            return self.online_users[address][index]
+        except:
+            return None
+
+    async def handle_public_chat(self, signature: str, message: dict, counter):
         """
         Handles incoming public chat messages and verifies the sender's signature.
         """
         try:
-            sender = message.get("sender")
+            sender_fingerprint = message.get("sender")
             # Get public keys from online users
-            sender_public_key = await self.get_public_key_from_fingerprint(sender)
-            if self.verify_signature(sender_public_key, signature, json.dumps(message)):
-                public_message = message.get("message", "")
-                logging.info(f"Received public chat from {sender}: {public_message}")
-            else:
-                logging.error(f"Signature verification failed for sender: {sender}")
+            sender_public_key = await self.get_public_key_from_fingerprint(
+                sender_fingerprint
+            )
+            if sender_public_key is None:
+                logging.error("Cannot get public key from public chat sender")
+                return
+
+            if crypto.verify_signature(
+                sender_public_key, signature, json.dumps(message), counter
+            ):
+                logging.error(
+                    f"Signature verification failed for sender: {sender_fingerprint}"
+                )
+                return
+
+            public_message = message.get("message", "")
+            sender_username = self.get_username_from_public_key(sender_public_key)
+            logging.info(f"(public chat) {sender_username}: {public_message}")
         except Exception as e:
             logging.error(f"Error processing public chat message: {e}")
 
-    async def handle_chat(self, signature, message):
+    async def handle_chat(self, signature: str, message: dict, counter):
         """
         Handles incoming chat messages, verifies the sender's signature,
         and logs the message if the signature is valid.
         """
         try:
-            chat = message.get("chat", {})
-            participants = chat.get("participants", [])
-            sender = participants[0]  # sender's fingerprint comes first
-            sender_public_key = await self.get_public_key_from_fingerprint(sender)
+            chat: dict = message.get("chat", {})
+            participants: list = chat.get("participants", [])
 
-            if self.verify_signature(sender_public_key, signature, json.dumps(message)):
-                public_message = chat.get("message", "")
-                logging.info(f"Received chat message: {public_message}")
-            else:
-                logging.error(f"Signature verification failed for sender: {sender}")
+            # Decrypt participants
+            for i, participant in enumerate(participants):
+                participants[i] = base64.b64decode(participant).decode()
+            logging.info(f"Participants: {participants}")
+
+            # Get sender's public key from fingerprint
+            sender_fingerprint = participants[0]  # sender's fingerprint comes first
+            sender_public_key = await self.get_public_key_from_fingerprint(
+                sender_fingerprint
+            )
+            if sender_public_key is None:
+                logging.error("Cannot get public key from chat sender")
+                return
+
+            if crypto.verify_signature(
+                sender_public_key, signature, json.dumps(message), counter
+            ):
+                logging.error(
+                    f"Signature verification failed for sender: {sender_fingerprint}"
+                )
+                return
+
+            try:
+                recipient_index = participants.index(self.fingerprint)
+            except ValueError:
+                logging.error(
+                    f"Cannot find self in recipient fingerprints: {self.fingerprint}"
+                )
+                return
+
+            chat_message = chat.get("message", "")
+            iv = base64.b64decode(message.get("iv", ""))
+            symm_key = message.get("symm_keys", [])[recipient_index - 1]
+
+            chat_message = Message(chat_message).decrypt_with_aes(
+                self.private_key, symm_key, iv
+            )
+
+            sender_username = self.get_username_from_public_key(sender_public_key)
+            logging.info(f"(private) {sender_username}: {chat_message}")
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 
@@ -300,9 +330,7 @@ class Client:
                         # Write the response content to a file
                         with open(filename, "wb") as f:
                             while True:
-                                chunk = await response.content.read(
-                                    1024
-                                )  
+                                chunk = await response.content.read(1024)
                                 if not chunk:
                                     break
                                 f.write(chunk)
