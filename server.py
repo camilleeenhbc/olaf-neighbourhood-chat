@@ -294,7 +294,7 @@ class Server:
         if "DoS" in message:
             logging.warning(f"DoS mode activated.")
             self.mode = True
-            await self.disable_dos(5)    #Disable after 5 seconds
+            await self.disable_dos(10)    #Disable after 10 seconds
             
         counter = request.get("counter", None)
         if counter is None or fingerprint is None or message is None:
