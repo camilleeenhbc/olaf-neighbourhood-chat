@@ -91,7 +91,7 @@ class Message:
         participants: List[str] = [],
     ):
         """Prepare an encrypted chat message, including AES key encryption."""
-
+        self.participants = participants
         # Encrypt the message and generate keys
         self.encrypt_chat_message(recipient_public_keys)
 

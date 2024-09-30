@@ -249,7 +249,6 @@ class Client:
         and logs the message if the signature is valid.
         """
         try:
-            logging.info("receives a private chat")
             encrypted_chat: dict = message.get("chat", {})
             iv = base64.b64decode(message.get("iv", ""))
             symm_keys = message.get("symm_keys", [])
@@ -268,12 +267,7 @@ class Client:
                 return
 
             chat = json.loads(chat)
-            logging.info(chat)
             participants: list = chat.get("participants", [])
-            # Decrypt participants
-            for i, participant in enumerate(participants):
-                participants[i] = base64.b64decode(participant).decode()
-            logging.info(f"Participants: {participants}")
 
             # Get sender's public key from fingerprint
             sender_fingerprint = participants[0]  # sender's fingerprint comes first
