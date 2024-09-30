@@ -2,6 +2,7 @@ import sys
 import asyncio
 import logging
 import crypto
+from threading import Thread
 from client import Client
 
 # logging.basicConfig(level=logging.ERROR)
@@ -42,6 +43,17 @@ async def get_client_inputs(client: Client):
 
 async def handle_online_users(client: Client):
     await client.request_client_list()
+    Thread(target=wait_and_print_client_list, args=(client,)).start()
+
+
+def wait_and_print_client_list(client: Client):
+    client.client_list_event.wait()
+
+    for clients in client.online_users.values():
+        for public_key in clients:
+            username = client.get_username_from_public_key(public_key)
+            tag = "(you)" if public_key == client.public_key else ""
+            print(f"- {username} {tag}")
 
 
 async def handle_chat(client: Client):
