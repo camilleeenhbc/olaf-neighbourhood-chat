@@ -20,6 +20,8 @@ logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 class Client:
     def __init__(self, server_url):
         self.counter = 0
+        self.hostname = server_url.split(":")[0]
+        self.port = int(server_url.split(":")[1])
         self.server_url = server_url
 
         self.private_key = rsa.generate_private_key(
@@ -81,32 +83,25 @@ class Client:
     async def connect_to_server(self):
         """Create connection to server"""
         try:
-            self.websocket = await connect(f"ws://{self.server_url}")
-        except Exception as e:
-            logging.error(f"Failed to connect to {self.server_url}: {e}")
-            return
-
-        await self.setup()
-
-    async def setup(self):
-        """Setting up after connecting to server"""
-        try:
-            logging.info(f"Connected to {self.server_url}")
+            self.websocket = await connect(f"ws://{self.hostname}:{self.port}")
+            logging.info(f"Connected to {self.hostname}:{self.port}")
             await self.send_message(self.websocket, chat_type="hello")
             listen_thread = asyncio.create_task(self.listen(self.websocket))
             await self.request_client_list()  # fetch online users
             await listen_thread
         except websockets.ConnectionClosed:
             logging.info("Disconnected")
+            await self.disconnect()
         except Exception as e:
-            logging.error(f"Failed: {e}")
+            logging.error(f"Failed to connect to {self.hostname}:{self.port}: {e}")
         finally:
             await self.disconnect()
 
     async def disconnect(self):
         """Disconnect client from server"""
-        logging.info("Disconnecting")
-        await self.websocket.close()
+        if self.websocket:
+            logging.info("Disconnecting")
+            await self.websocket.close()
 
     async def listen(self, websocket):
         """Listen for incoming messages"""

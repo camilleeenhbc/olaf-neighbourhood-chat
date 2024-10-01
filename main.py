@@ -1,8 +1,8 @@
 import asyncio
 import logging
-from argparse import ArgumentParser
 import src.utils.crypto as crypto
 from client import Client
+from argparse import ArgumentParser
 
 # logging.basicConfig(level=logging.ERROR)
 # logging.disable()
@@ -20,9 +20,6 @@ async def get_client_inputs(client: Client):
     print("4. Download a file")
     print("q. Quit")
     print("\n")
-
-    if client.websocket is None:
-        return
 
     choice = await prompt_input()
     while choice != "q":
@@ -42,7 +39,6 @@ async def get_client_inputs(client: Client):
 
 async def handle_online_users(client: Client):
     await client.request_client_list()
-    await client.client_list_event.wait()
 
     for clients in client.online_users.values():
         for public_key in clients:
@@ -151,15 +147,16 @@ parser.add_argument("-d", "--debug", action="store_true", help="Enable debug log
 parser.add_argument("--url", type=str, help="Server URL")
 
 args = parser.parse_args()
-# server_url = sys.argv[1]
+server_url = args.url
+
 
 # Client connects to server
-client = Client(args.url)
+client = Client(server_url)
 
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
-except Exception:
+except:
     loop.run_until_complete(client.disconnect())
 finally:
     loop.close()
