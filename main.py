@@ -43,11 +43,7 @@ async def get_client_inputs(client: Client):
 
 async def handle_online_users(client: Client):
     await client.request_client_list()
-    Thread(target=wait_and_print_client_list, args=(client,)).start()
-
-
-def wait_and_print_client_list(client: Client):
-    client.client_list_event.wait()
+    # await client.client_list_event.wait()
 
     for clients in client.online_users.values():
         for public_key in clients:

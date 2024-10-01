@@ -36,7 +36,7 @@ class Client:
         # List of currently online users { server_address1: [client public key 1, client public key 2, ...] }
         self.online_users = {}
 
-        self.client_list_event = threading.Event()
+        self.client_list_event = asyncio.Event()
 
     async def get_public_key_from_fingerprint(
         self, fingerprint: str
@@ -310,7 +310,9 @@ class Client:
                 else:
                     usernames.append(self.get_username_from_public_key(public_key))
 
-            logging.info(f"({', '.join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}")
+            logging.info(
+                f"({', '.join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}"
+            )
 
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
