@@ -139,8 +139,8 @@ class Server:
         message_type = message.get("type", None)
         
         counter = message.get("counter", None)
-        # if counter == 2:
-        #      await self.reset_counters(websocket)
+        if counter == 3:
+             await self.reset_counters(websocket)
         
         if message_type == "client_list_request":
             await self.send_client_list(websocket)
@@ -200,13 +200,15 @@ class Server:
         else:
             logging.error(f"{self.url}: Type not found for this message: {message}")
             
-    # async def reset_counters(self, websocket):
-    #    logging.warning(f"this is a test to reset counter")
-    #    for client_ws in self.clients:
-    #     if client_ws != websocket:
-    #         client_data = self.clients.get(client_ws, {})
-    #         if 'counter' in client_data:
-    #             client_data['counter'] = 0
+    async def reset_counters(self, websocket):
+       logging.warning(f"this is a test to reset counter")
+       for client_ws in self.clients:
+        if client_ws != websocket:
+            client_data = self.clients.get(client_ws, {})
+            if 'counter' in client_data:
+                client_data['counter'] += 1
+                self.clients[client_ws]['counter'] = client_data['counter']
+                logging.info(f"Resetting counter for client {client_ws}. Previous counter: {client_data['counter']}")
 
     async def send_response(
         self, websocket: websocket_server.ServerConnection, message
