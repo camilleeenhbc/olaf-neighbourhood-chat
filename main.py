@@ -1,6 +1,6 @@
-import sys
 import asyncio
 import logging
+from argparse import ArgumentParser
 import src.utils.crypto as crypto
 from client import Client
 
@@ -20,6 +20,9 @@ async def get_client_inputs(client: Client):
     print("4. Download a file")
     print("q. Quit")
     print("\n")
+
+    if client.websocket is None:
+        return
 
     choice = await prompt_input()
     while choice != "q":
@@ -143,16 +146,20 @@ async def main(client: Client):
     )
 
 
-# Arguments: server_url
-server_url = sys.argv[1]
+parser = ArgumentParser()
+parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
+parser.add_argument("--url", type=str, help="Server URL")
+
+args = parser.parse_args()
+# server_url = sys.argv[1]
 
 # Client connects to server
-client = Client(server_url)
+client = Client(args.url)
 
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
-except:
+except Exception:
     loop.run_until_complete(client.disconnect())
 finally:
     loop.close()

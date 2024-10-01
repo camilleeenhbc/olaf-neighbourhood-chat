@@ -1,12 +1,13 @@
 import json
 import os
-from typing import List, Optional
 import websockets
 import asyncio
 import logging
 import src.utils.crypto as crypto
 import aiohttp
 import base64
+
+from typing import List, Optional
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -19,8 +20,8 @@ logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 class Client:
     def __init__(self, server_url):
         self.counter = 0
-        self.hostname = server_url.split(":")[0]
-        self.port = int(server_url.split(":")[1])
+        self.server_url = server_url
+
         self.private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048,  # modulus length
@@ -80,17 +81,25 @@ class Client:
     async def connect_to_server(self):
         """Create connection to server"""
         try:
-            self.websocket = await connect(f"ws://{self.hostname}:{self.port}")
-            logging.info(f"Connected to {self.hostname}:{self.port}")
+            self.websocket = await connect(f"ws://{self.server_url}")
+        except Exception as e:
+            logging.error(f"Failed to connect to {self.server_url}: {e}")
+            return
+
+        await self.setup()
+
+    async def setup(self):
+        """Setting up after connecting to server"""
+        try:
+            logging.info(f"Connected to {self.server_url}")
             await self.send_message(self.websocket, chat_type="hello")
             listen_thread = asyncio.create_task(self.listen(self.websocket))
             await self.request_client_list()  # fetch online users
             await listen_thread
         except websockets.ConnectionClosed:
             logging.info("Disconnected")
-            await self.disconnect()
         except Exception as e:
-            logging.error(f"Failed to connect to {self.hostname}:{self.port}: {e}")
+            logging.error(f"Failed: {e}")
         finally:
             await self.disconnect()
 

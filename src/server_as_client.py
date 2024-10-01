@@ -1,14 +1,17 @@
 import json
 import logging
+import src.utils.crypto as crypto
+
 from websockets import WebSocketClientProtocol
 from typing import List
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
 
-class Neighbourhood:
-    def __init__(self, server_url) -> None:
-        self.server_url = server_url
+class ServerAsClient:
+    def __init__(self, server) -> None:
+        self.server = server
+        self.server_url = server.url
 
         # List of all connected clients on all servers.
         # Format: {server_url1: ["RSA1", "RSA2"], server_url2: ["RSA3"]}
@@ -71,14 +74,20 @@ class Neighbourhood:
 
     async def send_server_hello(self, websocket: WebSocketClientProtocol):
         logging.info(f"{self.server_url} sends server_hello")
+        data = {
+            "type": "server_hello",
+            "sender": self.server_url,
+        }
+
+        self.server.counter += 1
+
         request = {
             "type": "signed_data",
-            "data": {
-                "type": "server_hello",
-                "sender": self.server_url,
-            },
-            "counter": 0,
-            "signature": "",
+            "data": data,
+            "counter": self.server.counter,
+            "signature": crypto.sign_message(
+                json.dumps(data), self.server.counter, self.server.private_key
+            ),
         }
 
         await self.send_request(websocket, request)
