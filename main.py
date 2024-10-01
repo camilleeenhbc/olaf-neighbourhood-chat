@@ -81,30 +81,36 @@ async def handle_chat(client: Client):
         public_keys.append(public_key)
         fingerprints.append(recipient_fingerprint)
 
-    choice = await prompt_input("Send a message or file? (m/f): ")
-    if choice == "f":
-        file_path = await prompt_input("Enter the file path: ")
-        file_url = await client.upload_file(file_path)
-        if file_url:
+    while True:
+        choice = await prompt_input(
+            "Press Enter to type a message, (f) for file, (x) to exit chat: "
+        )
+        if choice == "x":
+            print("Exiting chat...")
+            break
+        elif choice == "f":
+            file_path = await prompt_input("Enter the file path: ")
+            file_url = await client.upload_file(file_path)
+            if file_url:
+                await client.send_message(
+                    client.websocket,
+                    f"Sent a file! Download here: {file_url}",
+                    chat_type="chat",
+                    destination_servers=[address],
+                    recipient_public_keys=public_keys,
+                    participants=fingerprints,
+                )
+        else:
+            message = await prompt_input("Enter your message: ")
             await client.send_message(
                 client.websocket,
-                f"Sent a file! Download here: {file_url}",
+                message,
                 chat_type="chat",
                 destination_servers=[address],
                 recipient_public_keys=public_keys,
                 participants=fingerprints,
             )
-    else:
-        message = await prompt_input("Enter your message: ")
-        await client.send_message(
-            client.websocket,
-            message,
-            chat_type="chat",
-            destination_servers=[address],
-            recipient_public_keys=public_keys,
-            participants=fingerprints,
-        )
-        print("Message sent successfully.")
+            print("Message sent successfully.")
 
 
 async def handle_public_chat(client: Client):
