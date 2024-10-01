@@ -1,7 +1,7 @@
 import sys
 import asyncio
 import logging
-import crypto
+import src.utils.crypto as crypto
 from client import Client
 
 # logging.basicConfig(level=logging.ERROR)

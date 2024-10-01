@@ -4,13 +4,13 @@ from typing import List, Optional
 import websockets
 import asyncio
 import logging
-import crypto
+import src.utils.crypto as crypto
 import aiohttp
 import base64
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
-from message import Message
+from src.utils.message import Message
 
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)

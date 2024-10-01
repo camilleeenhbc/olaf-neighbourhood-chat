@@ -2,7 +2,7 @@ import logging
 import sys
 import json
 import os
-import crypto
+import src.utils.crypto as crypto
 import base64
 import asyncio
 import websockets
@@ -10,8 +10,8 @@ import websockets.asyncio.server as websocket_server
 from typing import List, Optional
 from aiohttp import web
 
-from neighbourhood import Neighbourhood
-from message import Message
+from src.neighbourhood import Neighbourhood
+from src.utils.message import Message
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
