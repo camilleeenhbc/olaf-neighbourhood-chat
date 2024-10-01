@@ -7,7 +7,6 @@ import logging
 import crypto
 import aiohttp
 import base64
-import threading
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -44,7 +43,6 @@ class Client:
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
-        await self.request_client_list()  # Fetch online users
         for server, clients in self.online_users.items():
             for public_key in clients:
                 client_fingerprint = crypto.generate_fingerprint(public_key)
@@ -58,7 +56,6 @@ class Client:
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
-        await self.request_client_list()  # Fetch online users
         public_keys = [None] * len(fingerprints)
         if self.fingerprint in fingerprints:
             public_keys[fingerprints.index(self.fingerprint)] = self.public_key
@@ -85,13 +82,14 @@ class Client:
             self.websocket = await connect(f"ws://{self.server_url}")
             logging.info(f"Connected to {self.server_url}")
             await self.send_message(self.websocket, chat_type="hello")
+            listen_thread = asyncio.create_task(self.listen(self.websocket))
             await self.request_client_list()  # fetch online users
-            await self.listen(self.websocket)
+            await listen_thread
         except websockets.ConnectionClosed:
             logging.info("Disconnected")
+            await self.disconnect()
         except Exception as e:
             logging.error(f"Failed to connect to {self.server_url}: {e}")
-        finally:
             await self.disconnect()
 
     async def disconnect(self):
@@ -103,9 +101,8 @@ class Client:
         """Listen for incoming messages"""
         try:
             async for message in websocket:
-                # logging.info(f"Received message from server: {message}")
                 data = json.loads(message)
-                await self.receive_message(data)
+                asyncio.create_task(self.receive_message(data))
         except Exception as e:
             logging.error(f"Error in receiving message: {e}")
 
@@ -171,6 +168,7 @@ class Client:
         }
 
         await self.websocket.send(json.dumps(request))
+        await self.client_list_event.wait()
 
     # HANDLE INCOMING MESSAGES
     async def receive_message(self, data):
@@ -237,6 +235,8 @@ class Client:
         Handles incoming public chat messages and verifies the sender's signature.
         """
         try:
+            await self.request_client_list()  # Fetch online users
+
             sender_fingerprint = message.get("sender")
             # Get public keys from online users
             sender_public_key = await self.get_public_key_from_fingerprint(
@@ -266,6 +266,8 @@ class Client:
         and logs the message if the signature is valid.
         """
         try:
+            await self.request_client_list()  # Fetch online users
+
             encrypted_chat: dict = message.get("chat", {})
             iv = base64.b64decode(message.get("iv", ""))
             symm_keys = message.get("symm_keys", [])
