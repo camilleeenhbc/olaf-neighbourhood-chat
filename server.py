@@ -22,22 +22,23 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 class Server:
-    def __init__(self, url: str = "localhost:80") -> None:
+    def __init__(self, url: str = "localhost:80", neighbours: List[str] = []) -> None:
         self._websocket_server: Optional[websocket_server.Server] = None
 
         self.url = url
 
-        self.neighbour_servers = []
+        self.neighbour_servers = neighbours
         self.neighbour_websockets = {}  # Websocket (ServerConnection): Neighbour URL
         self.neighbourhood = Neighbourhood(self.url)
 
         # {websocket: {public_key, fingerprint, counter}}
         self.clients = {}  # List of clients connecting to this server
 
-    def add_neighbour_servers(self, server_urls: List[str]):
+    async def add_neighbour_servers(self, server_urls: List[str]):
         for url in server_urls:
             if url not in self.neighbour_servers:
                 self.neighbour_servers.append(url)
+                await self.connect_to_neighbour(url)
 
     async def connect_to_neighbourhood(self):
         """Create client connections for every neighbour servers"""
@@ -451,8 +452,7 @@ if __name__ == "__main__":
         neighbours.append(sys.argv[3 + i])
 
     # Start server
-    server = Server(server_url)
-    server.add_neighbour_servers(neighbours)
+    server = Server(server_url, neighbours)
 
     loop = asyncio.get_event_loop()
     try:
