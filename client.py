@@ -20,7 +20,8 @@ logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 class Client:
     def __init__(self, server_url):
         self.counter = 0
-        self.server_url = server_url
+        self.hostname = server_url.split(":")[0]
+        self.port = int(server_url.split(":")[1])
         self.private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048,  # modulus length
@@ -82,15 +83,15 @@ class Client:
     async def connect_to_server(self):
         """Create connection to server"""
         try:
-            self.websocket = await connect(f"ws://{self.server_url}")
-            logging.info(f"Connected to {self.server_url}")
+            self.websocket = await connect(f"ws://{self.hostname}:{self.port}")
+            logging.info(f"Connected to {self.hostname}:{self.port}")
             await self.send_message(self.websocket, chat_type="hello")
             await self.request_client_list()  # fetch online users
             await self.listen(self.websocket)
         except websockets.ConnectionClosed:
             logging.info("Disconnected")
         except Exception as e:
-            logging.error(f"Failed to connect to {self.server_url}: {e}")
+            logging.error(f"Failed to connect to {self.hostname}:{self.port}: {e}")
         finally:
             await self.disconnect()
 
@@ -319,20 +320,16 @@ class Client:
 
     async def upload_file(self, filename):
         """Upload a file to the server using an HTTP POST request"""
-        logging.info(f"Uploading file {filename}")
-        url = f"http://localhost:443/upload"
+        url = f"http://{self.hostname}:{str(self.port+1000)}/upload"
         async with aiohttp.ClientSession() as session:
             with open(filename, "rb") as f:
                 files = {"file": f}
-                logging.info(f"Uploading file {filename}")
-
                 # POST request
                 async with session.post(url, data=files) as response:
                     if response.status == 200:
                         json_response = await response.json()
-                        logging.info(
-                            f"File uploaded successfully. File URL: {json_response['body']['file_url']}"
-                        )
+                        logging.info(f"File uploaded successfully.")
+                        logging.info(json_response)
                         return json_response["body"]["file_url"]
                     elif response.status == 413:
                         logging.error(
@@ -346,24 +343,32 @@ class Client:
 
             return None
 
-    async def download_file(self, filename):
-        """Download a file from the aiohttp server asynchronously."""
-        url = f"http://localhost:443/download/{filename}"
-
+    async def download_file(self, url):
+        """Download a file from the aiohttp server using the unique ID."""
         try:
             # Create a new aiohttp session
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
                     if response.status == 200:
-                        # Write the response content to a file
-                        with open(filename, "wb") as f:
+                        # Retrieve the filename from the headers
+                        content_disposition = response.headers.get(
+                            "Content-Disposition"
+                        )
+                        original_filename = content_disposition.split('filename="')[1][
+                            :-1
+                        ]
+
+                        # Save the file with its original filename
+                        with open(original_filename, "wb") as f:
                             while True:
                                 chunk = await response.content.read(1024)
                                 if not chunk:
                                     break
                                 f.write(chunk)
 
-                        logging.info(f"File {filename} downloaded successfully.")
+                        logging.info(
+                            f"File {original_filename} downloaded successfully."
+                        )
                     else:
                         logging.error(
                             f"Failed to download file: {response.status} {await response.text()}"
