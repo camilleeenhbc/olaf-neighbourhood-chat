@@ -323,7 +323,7 @@ class Client:
 
     async def upload_file(self, filename):
         """Upload a file to the server using an HTTP POST request"""
-        url = f"http://{self.hostname}:{str(self.port+1000)}/upload"
+        url = f"http://{self.hostname}:{str(self.port+1000)}/api/upload"
         async with aiohttp.ClientSession() as session:
             with open(filename, "rb") as f:
                 files = {"file": f}
@@ -332,8 +332,7 @@ class Client:
                     if response.status == 200:
                         json_response = await response.json()
                         logging.info(f"File uploaded successfully.")
-                        logging.info(json_response)
-                        return json_response["body"]["file_url"]
+                        return json_response["response"]["body"]["file_url"]
                     elif response.status == 413:
                         logging.error(
                             f"File too large. Server returned 413 Payload Too Large."

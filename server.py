@@ -20,7 +20,7 @@ logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 UPLOAD_DIRECTORY = "files"
 if not os.path.exists(UPLOAD_DIRECTORY):
     os.makedirs(UPLOAD_DIRECTORY)
-MAX_FILE_SIZE = 10 * 1024 * 1024
+MAX_FILE_SIZE = 50 * 1024 * 1024
 
 
 class Server:
@@ -385,7 +385,7 @@ class Server:
         """Start the HTTP server for handling file uploads"""
         app = web.Application()
         app.router.add_post(
-            "/upload", self.handle_file_upload
+            "/api/upload", self.handle_file_upload
         )  # HTTP POST route for file upload
         app.router.add_get("/{filename}", self.handle_download)
 
@@ -409,7 +409,6 @@ class Server:
             filename = field.filename
             file_extension = os.path.splitext(filename)[1]  # Get file extension
             unique_id = str(uuid.uuid4())  # Generate unique UUID
-            print(unique_id)
             unique_filename = f"{os.path.splitext(filename)[0]}-{unique_id}{file_extension}"  # Append UUID to filename
             file_path = os.path.join(UPLOAD_DIRECTORY, unique_filename)
 
