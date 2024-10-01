@@ -223,7 +223,7 @@ class Server:
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
 
-        def check_private_message(self, websocket, message):
+    def check_private_message(self, websocket, message):
             sender = self.clients.get(websocket)
             if not sender:
                 logging.error(f"{self.url} message from unknown client detected")
