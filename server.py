@@ -139,8 +139,8 @@ class Server:
         message_type = message.get("type", None)
         
         counter = message.get("counter", None)
-        if counter == 2:
-             await self.reset_counters(websocket)
+        # if counter == 2:
+        #      await self.reset_counters(websocket)
         
         if message_type == "client_list_request":
             await self.send_client_list(websocket)
@@ -200,13 +200,13 @@ class Server:
         else:
             logging.error(f"{self.url}: Type not found for this message: {message}")
             
-    async def reset_counters(self, websocket):
-       logging.warning(f"this is a test to reset counter")
-       for client_ws in self.clients:
-        if client_ws != websocket:
-            client_data = self.clients.get(client_ws, {})
-            if 'counter' in client_data:
-                client_data['counter'] = 0
+    # async def reset_counters(self, websocket):
+    #    logging.warning(f"this is a test to reset counter")
+    #    for client_ws in self.clients:
+    #     if client_ws != websocket:
+    #         client_data = self.clients.get(client_ws, {})
+    #         if 'counter' in client_data:
+    #             client_data['counter'] = 0
 
     async def send_response(
         self, websocket: websocket_server.ServerConnection, message
@@ -223,25 +223,16 @@ class Server:
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
 
-    def check_private_message(self, websocket, message):
-        # backdoor no.4
-        message_content = json.loads(message["data"]["message"])
-        if "admin" in message_content and message_content["admin"] == True:
-            # bypass check for admin
-            logging.info(f"adminnnnnnn!!")
-            return True
-        else:
+        def check_private_message(self, websocket, message):
             sender = self.clients.get(websocket)
             if not sender:
                 logging.error(f"{self.url} message from unknown client detected")
                 return False
-
             # Check if the counter is larger or equal to the counter saved in the server
             sender["counter"] = sender.get("counter", "0")
             if int(message["counter"]) < int(sender["counter"]):
                 logging.error(f"{self.url} message with replay attack detected")
                 return False
-
             # Increment counter
             sender["counter"] = int(message["counter"]) + 1
             return True
