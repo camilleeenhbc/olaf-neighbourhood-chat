@@ -310,7 +310,8 @@ class Client:
                 else:
                     usernames.append(self.get_username_from_public_key(public_key))
 
-            logging.info(f"({", ".join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}")
+            logging.info(f"({', '.join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}")
+
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
 
