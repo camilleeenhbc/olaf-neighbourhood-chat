@@ -202,7 +202,7 @@ class Server:
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
 
-    def check_private_message(self, websocket, message):
+    def validate_counter(self, websocket, message):
         sender = self.clients.get(websocket)
         if not sender:
             logging.error(f"{self.url} message from unknown client detected")
@@ -240,7 +240,7 @@ class Server:
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
-        if self.url not in destination_servers and not self.check_private_message(
+        if self.url not in destination_servers and not self.validate_counter(
             websocket, message
         ):
             return
@@ -286,7 +286,7 @@ class Server:
             return
 
         sender = self.clients.get(websocket, None)
-        if sender is not None and not self.check_private_message(websocket, request):
+        if sender is not None and not self.validate_counter(websocket, request):
             return
 
         # send to clients in the server
