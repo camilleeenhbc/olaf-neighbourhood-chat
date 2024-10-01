@@ -3,7 +3,6 @@ import sys
 import json
 import os
 import src.utils.crypto as crypto
-import base64
 import asyncio
 import uuid
 import websockets
@@ -14,7 +13,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
 from src.server_as_client import ServerAsClient
-from src.utils.message import Message
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
@@ -232,11 +230,13 @@ class Server:
         # Verify signature
         public_key = self.neighbour_servers[sender_address].get("public_key", None)
         public_key = crypto.load_pem_public_key(public_key)
-        if not crypto.verify_signature(public_key, signature, data, counter):
+        if not crypto.verify_signature(
+            public_key, signature, json.dumps(data), counter
+        ):
             logging.error(f"{self.url} cannot verify signature for server_hello")
             return
 
-        logging.info(f"{self.url} Accepts server hello from {sender_address}")
+        logging.info(f"{self.url} accepts server hello from {sender_address}")
         # Map the server connection to this address and establish a client connection
         self.neighbour_websockets[websocket] = sender_address
         await self.connect_to_neighbour(sender_address)
@@ -510,7 +510,6 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
     for neighbour in neighbours:
-        print(neighbour)
         loop.run_until_complete(server.add_neighbour_server(neighbour, "1"))
 
     try:
