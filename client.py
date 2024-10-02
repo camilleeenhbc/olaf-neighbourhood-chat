@@ -1,5 +1,4 @@
 import json
-import os
 import websockets
 import asyncio
 import logging
@@ -323,11 +322,11 @@ class Client:
                 async with session.post(url, data=files) as response:
                     if response.status == 200:
                         json_response = await response.json()
-                        logging.info(f"File uploaded successfully.")
+                        logging.info("File uploaded successfully.")
                         return json_response["response"]["body"]["file_url"]
                     elif response.status == 413:
                         logging.error(
-                            f"File too large. Server returned 413 Payload Too Large."
+                            "File too large. Server returned 413 Payload Too Large."
                         )
                     else:
                         logging.error(
