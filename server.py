@@ -148,7 +148,7 @@ class Server:
         Handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        
+        logging.info(f"called handle_message by {self.url}")
         if self.mode:
             logging.warning(f"Whoops!")
             return
@@ -158,8 +158,9 @@ class Server:
         message_type = message.get("type", None)
         
         counter = message.get("counter", None)
-        if counter == 6:
-             await self.reset_counters(websocket)
+        if counter == 4:
+            await self.reset_counters(websocket)
+            logging.warning(f"{websocket} invoked reset_counter function {counter}")
         
         if message_type == "client_list_request":
             await self.send_client_list(websocket)
@@ -334,6 +335,7 @@ class Server:
         logging.info(f"{self.url} receives hello from client")
         self.clients[websocket] = {
             "public_key": client_public_key,
+            "counter": 0
         }
         await self.send_client_update()
 
