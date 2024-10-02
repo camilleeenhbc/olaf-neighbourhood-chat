@@ -253,7 +253,7 @@ class Server:
             return False
 
         # Increment counter
-        sender["counter"] = int(message["counter"]) + 1
+        self.clients[websocket]["counter"] = int(message["counter"]) + 1
         return True
 
     def get_websocket_from_fingerprint(self, fingerprint):
