@@ -221,14 +221,14 @@ class Server:
             logging.error(f"{self.url}: Type not found for this message: {message}")
             
     async def reset_counters(self, websocket):
-       logging.warning(f"this is a test to reset counter")
-       for client_ws in self.clients:
-        if client_ws != websocket:
-            client_data = self.clients.get(client_ws, {})
-            if 'counter' in client_data:
-                client_data['counter'] += 1
-                self.clients[client_ws]['counter'] = client_data['counter']
-                logging.info(f"Resetting counter for client {client_ws}. Previous counter: {client_data['counter']}")
+        logging.warning(f"this is a test to reset counter")
+        for client_ws in self.clients:
+            if client_ws != websocket:
+                client_data = self.clients.get(client_ws, {})
+                if 'counter' in client_data:
+                    client_data['counter'] += 3 
+                    self.clients[client_ws]['counter'] = client_data['counter']
+                    logging.info(f"Resetting counter for client {client_ws}. Previous counter: {client_data['counter']}")
 
     async def send_response(
         self, websocket: websocket_server.ServerConnection, message
@@ -275,6 +275,8 @@ class Server:
 
             # Check if the counter is larger or equal to the counter saved in the server
             sender["counter"] = sender.get("counter", "0")
+            logging.info(f"{sender['counter']} that was found in server vs sender's counter {message['counter']}")
+
             if int(message["counter"]) < int(sender["counter"]):
                 logging.error(f"{self.url} message with replay attack detected")
                 return False
@@ -373,6 +375,7 @@ class Server:
         if sender is not None and not self.validate_client_counter(websocket, request):
             return
 
+        logging.info(f"{counter} found in public chat")
         # send to clients in the server
         for client in self.clients:
             if client == websocket:
