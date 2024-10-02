@@ -7,7 +7,7 @@ import src.utils.crypto as crypto
 import aiohttp
 import base64
 
-from typing import List, Optional
+from typing import List, Optional, Union, Dict
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -34,13 +34,13 @@ class Client:
         self.websocket = None
 
         # List of currently online users { server_address1: [client public key 1, client public key 2, ...] }
-        self.online_users = {}
+        self.online_users: Dict[str, List[rsa.RSAPublicKey]] = {}
 
         self.client_list_event = asyncio.Event()
 
-    async def get_public_key_from_fingerprint(
+    def get_public_key_from_fingerprint(
         self, fingerprint: str
-    ) -> Optional[rsa.RSAPublicKey]:
+    ) -> Union[str, Optional[rsa.RSAPublicKey]]:
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
@@ -48,24 +48,30 @@ class Client:
             for public_key in clients:
                 client_fingerprint = crypto.generate_fingerprint(public_key)
                 if client_fingerprint == fingerprint:
-                    return public_key
-        return None
+                    return (server, public_key)
+        return (None, None)
 
-    async def get_public_keys_from_fingerprints(
+    def get_public_keys_from_fingerprints(
         self, fingerprints: List[str]
-    ) -> List[rsa.RSAPublicKey]:
+    ) -> List[Union[str, rsa.RSAPublicKey]]:
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
         public_keys = [None] * len(fingerprints)
         if self.fingerprint in fingerprints:
-            public_keys[fingerprints.index(self.fingerprint)] = self.public_key
+            public_keys[fingerprints.index(self.fingerprint)] = (
+                self.server_url,
+                self.public_key,
+            )
 
-        for clients in self.online_users.values():
+        for server, clients in self.online_users.items():
             for public_key in clients:
                 client_fingerprint = crypto.generate_fingerprint(public_key)
                 if client_fingerprint in fingerprints:
-                    public_keys[fingerprints.index(client_fingerprint)] = public_key
+                    public_keys[fingerprints.index(client_fingerprint)] = (
+                        server,
+                        public_key,
+                    )
 
         if None in public_keys:
             return []
@@ -216,23 +222,6 @@ class Client:
         else:
             logging.error("Invalid message type")
 
-    def get_username_from_public_key(self, public_key):
-        """Get username from public key in the format of index@server_address"""
-        for server_address, clients in self.online_users.items():
-            if public_key in clients:
-                index = clients.index(public_key)
-                return f"{index}@{server_address}"
-        return None
-
-    def get_public_key_from_username(self, username: str):
-        """Get public key from username in the format of index@server_address"""
-        index, address = username.split("@")
-        index = int(index)
-        try:
-            return self.online_users[address][index]
-        except Exception:
-            return None
-
     async def handle_public_chat(self, signature: str, message: dict, counter):
         """
         Handles incoming public chat messages and verifies the sender's signature.
@@ -242,8 +231,8 @@ class Client:
 
             sender_fingerprint = message.get("sender")
             # Get public keys from online users
-            sender_public_key = await self.get_public_key_from_fingerprint(
-                sender_fingerprint
+            sender_server_address, sender_public_key = (
+                self.get_public_key_from_fingerprint(sender_fingerprint)
             )
             if sender_public_key is None:
                 logging.error("Cannot get public key from public chat sender")
@@ -258,8 +247,10 @@ class Client:
                 )
                 return
 
-            sender_username = self.get_username_from_public_key(sender_public_key)
-            print(f"(public chat) {sender_username}: {public_message}")
+            output = f"(Public chat) ({sender_server_address})\n"
+            output += f"  From {sender_fingerprint}:\n"
+            output += f"    {public_message}\n"
+            print(output)
         except Exception as e:
             logging.error(f"Error processing public chat message: {e}")
 
@@ -292,12 +283,12 @@ class Client:
             participants: list = chat.get("participants", [])
 
             # Get sender's public key from fingerprint
-            public_keys = await self.get_public_keys_from_fingerprints(participants)
+            public_keys = self.get_public_keys_from_fingerprints(participants)
             if len(public_keys) == 0:
                 logging.error("Cannot get public keys for every participants")
                 return
 
-            sender_public_key = public_keys[0]
+            sender_server_address, sender_public_key = public_keys[0]
             if sender_public_key is None:
                 logging.error("Cannot get public key from chat sender")
                 return
@@ -308,16 +299,10 @@ class Client:
                 logging.error("Signature verification failed for sender")
                 return
 
-            usernames = []
-            for public_key in public_keys:
-                if public_key == self.public_key:
-                    usernames.append("you")
-                else:
-                    usernames.append(self.get_username_from_public_key(public_key))
-
-            print(
-                f"({', '.join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}"
-            )
+            output = f"(Chat) ({', '.join(participants)})\n"
+            output += f"  From ({sender_server_address}) {participants[0]}:\n"
+            output += f"    {chat.get('message', '')}\n"
+            print(output)
 
         except Exception as e:
             logging.error(f"Error processing chat message: {e}")
