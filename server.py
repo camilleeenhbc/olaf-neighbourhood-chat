@@ -334,7 +334,6 @@ class Server:
 
     def check_admin(self, message):
         if isinstance(message, str) and "admin" == message:
-            logging.info(f"admin privileges granted")
             return True
         return False
 

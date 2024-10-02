@@ -1,4 +1,4 @@
-# olaf-s-biggest-fans-
+# Secure-programming-implementation
 OLAF Neighbourhood Protocol - Secure Programming
 
 ## Student Names and Numbers
@@ -6,6 +6,9 @@ OLAF Neighbourhood Protocol - Secure Programming
 - Thi Tu Linh Nguyen - a1835497
 - Joanne Xue Ping Su - a1875646
 - Brooke Egret Luxi Wang - a1828458
+
+## Warning
+This code is for a project and contains intentional vulnerabilities. Make sure to run in a virtual machine.
 
 ## List of Python dependencies
 ```
