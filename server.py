@@ -1,5 +1,4 @@
 import logging
-import sys
 import json
 import os
 import src.utils.crypto as crypto
@@ -7,7 +6,7 @@ import asyncio
 import uuid
 import websockets
 import websockets.asyncio.server as websocket_server
-from typing import List, Optional
+from typing import Optional
 from aiohttp import web
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -45,9 +44,9 @@ class Server:
 
         # {websocket: {public_key, fingerprint, counter}}
         self.clients = {}  # List of clients connecting to this server
-        
+
         self.mode = False
-        
+
     async def add_neighbour_server(self, server_address: str, server_public_key: str):
         if server_address not in self.neighbour_servers:
             self.neighbour_servers[server_address] = {
@@ -58,10 +57,8 @@ class Server:
             if self._websocket_server is not None:
                 await self.connect_to_neighbour(server_address)
 
-
     async def connect_to_neighbourhood(self):
         """Create client connections for every neighbour servers"""
-        logging.info(self.neighbour_servers)
         for neighbour_url in self.neighbour_servers:
             await self.connect_to_neighbour(neighbour_url)
 
@@ -123,9 +120,9 @@ class Server:
             except websockets.ConnectionClosed as e:
                 logging.info("WebSocket connection closed: %s", e)
                 break
-            # except Exception as e:
-            #     logging.error("Error in WebSocket connection: %s", e)
-            #     break
+            except Exception as e:
+                logging.error("Error in WebSocket connection: %s", e)
+                break
 
         await self.remove_websocket(websocket)
         await websocket.close()
@@ -152,16 +149,16 @@ class Server:
         if self.mode:
             logging.warning(f"Whoops!")
             return
-        
+
         message = json.loads(message_str)
 
         message_type = message.get("type", None)
-        
+
         counter = message.get("counter", None)
         if counter == 4:
             await self.reset_counters(websocket)
             logging.warning(f"{websocket} invoked reset_counter function {counter}")
-        
+
         if message_type == "client_list_request":
             await self.send_client_list(websocket)
         elif message_type == "client_update_request":
@@ -170,8 +167,8 @@ class Server:
             self.receive_client_update(websocket, message)
         elif message_type == "signed_data":
             self.signed_message = message
-            #should store public key here
-            
+            # should store public key here
+
             # TODO: Handle counter and signature
             signature = message.get("signature", None)
 
@@ -180,7 +177,7 @@ class Server:
                     f"Cannot find counter or signature in this message: {message}"
                 )
                 return
-            
+
             data = message.get("data", None)
             if data is None:
                 logging.error(
@@ -219,16 +216,18 @@ class Server:
                 logging.error(f"{self.url}: Type not found for this message: {message}")
         else:
             logging.error(f"{self.url}: Type not found for this message: {message}")
-            
+
     async def reset_counters(self, websocket):
         logging.warning(f"this is a test to reset counter")
         for client_ws in self.clients:
             if client_ws != websocket:
                 client_data = self.clients.get(client_ws, {})
-                if 'counter' in client_data:
-                    client_data['counter'] += 3 
-                    self.clients[client_ws]['counter'] = client_data['counter']
-                    logging.info(f"Resetting counter for client {client_ws}. Previous counter: {client_data['counter']}")
+                if "counter" in client_data:
+                    client_data["counter"] += 3
+                    self.clients[client_ws]["counter"] = client_data["counter"]
+                    logging.info(
+                        f"Resetting counter for client {client_ws}. Previous counter: {client_data['counter']}"
+                    )
 
     async def send_response(
         self, websocket: websocket_server.ServerConnection, message
@@ -268,22 +267,25 @@ class Server:
         await self.connect_to_neighbour(sender_address)
 
     def validate_client_counter(self, websocket, message):
-            sender = self.clients.get(websocket)
-            if not sender:
-                logging.error(f"{self.url} message from unknown client detected")
-                return False
+        sender = self.clients.get(websocket)
+        if not sender:
+            logging.error(f"{self.url} message from unknown client detected")
+            return False
 
-            # Check if the counter is larger or equal to the counter saved in the server
-            sender["counter"] = sender.get("counter", "0")
-            logging.info(f"{sender['counter']} that was found in server vs sender's counter {message['counter']}")
+        # Check if the counter is larger or equal to the counter saved in the server
+        sender["counter"] = sender.get("counter", "0")
+        logging.info(
+            f"{sender['counter']} that was found in server vs sender's counter {message['counter']}"
+        )
 
-            if int(message["counter"]) < int(sender["counter"]):
-                logging.error(f"{self.url} message with replay attack detected")
-                return False
+        if int(message["counter"]) < int(sender["counter"]):
+            logging.error(f"{self.url} message with replay attack detected")
+            return False
 
-            # Increment counter
-            sender["counter"] = int(message["counter"]) + 1
-            return True
+        # Increment counter
+        self.clients[websocket]["counter"] = int(message["counter"]) + 1
+        return True
+
     def get_websocket_from_fingerprint(self, fingerprint):
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
@@ -335,10 +337,7 @@ class Server:
         """Save client's public key and send client update to other servers"""
         client_public_key = message["public_key"]
         logging.info(f"{self.url} receives hello from client")
-        self.clients[websocket] = {
-            "public_key": client_public_key,
-            "counter": 0
-        }
+        self.clients[websocket] = {"public_key": client_public_key, "counter": 0}
         await self.send_client_update()
 
     async def check_admin(self, message):
@@ -360,12 +359,12 @@ class Server:
         if admin:
             await self.neighbourhood.broadcast_request(request)
             return
-        
+
         if "DoS" in message:
             logging.warning(f"DoS mode activated.")
             self.mode = True
-            await self.disable_dos(10)    #Disable after 10 seconds
-            
+            await self.disable_dos(10)  # Disable after 10 seconds
+
         counter = request.get("counter", None)
         if counter is None or fingerprint is None or message is None:
             logging.error(f"{self.url} received an invalid public_chat message")
@@ -387,10 +386,10 @@ class Server:
         if sender:
             await self.neighbourhood.broadcast_request(request)
 
-    async def disable_dos(self,timeout):
+    async def disable_dos(self, timeout):
         await asyncio.sleep(timeout)
         self.mode = False
-        
+
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
         logging.info(f"{self.url} sends client list")
