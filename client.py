@@ -14,9 +14,6 @@ from cryptography.hazmat.backends import default_backend
 from src.utils.message import Message
 
 
-logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
-
-
 class Client:
     def __init__(self, server_url):
         self.counter = 0
@@ -262,7 +259,7 @@ class Client:
                 return
 
             sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(public chat) {sender_username}: {public_message}")
+            print(f"(public chat) {sender_username}: {public_message}")
         except Exception as e:
             logging.error(f"Error processing public chat message: {e}")
 
@@ -318,7 +315,7 @@ class Client:
                 else:
                     usernames.append(self.get_username_from_public_key(public_key))
 
-            logging.info(
+            print(
                 f"({', '.join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}"
             )
 
