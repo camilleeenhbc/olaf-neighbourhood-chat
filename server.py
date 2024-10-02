@@ -270,7 +270,6 @@ class Server:
         # Check if the counter is larger or equal to the counter saved in the server
         sender["counter"] = sender.get("counter", "0")
 
-
         if int(message["counter"]) < int(sender["counter"]):
             logging.error(f"{self.url} message with replay attack detected")
             return False
