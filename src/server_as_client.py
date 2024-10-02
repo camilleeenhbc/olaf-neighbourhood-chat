@@ -35,8 +35,10 @@ class ServerAsClient:
             self.active_servers.pop(websocket)
 
     def find_active_server(self, server_url) -> WebSocketClientProtocol:
+        logging.info(f"Find {server_url} in {self.active_servers.values()}")
         for websocket, url in self.active_servers.items():
             if url == server_url:
+                logging.info(f"Found {websocket}")
                 return websocket
 
         return None
