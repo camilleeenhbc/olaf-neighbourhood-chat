@@ -7,6 +7,14 @@ OLAF Neighbourhood Protocol - Secure Programming
 - Joanne Xue Ping Su - a1875646
 - Brooke Egret Luxi Wang - a1828458
 
+## List of Python dependencies
+```
+websockets==13.0.1
+cryptography==43.0.1
+black==24.8.0
+aiohttp==3.10.7
+```
+
 ## Set up
 
 ### Set up virtual environment

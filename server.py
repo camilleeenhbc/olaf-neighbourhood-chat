@@ -1,5 +1,4 @@
 import logging
-import sys
 import json
 import os
 import src.utils.crypto as crypto
@@ -7,7 +6,7 @@ import asyncio
 import uuid
 import websockets
 import websockets.asyncio.server as websocket_server
-from typing import List, Optional
+from typing import Optional
 from aiohttp import web
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -120,9 +119,9 @@ class Server:
             except websockets.ConnectionClosed as e:
                 logging.info("WebSocket connection closed: %s", e)
                 break
-            # except Exception as e:
-            #     logging.error("Error in WebSocket connection: %s", e)
-            #     break
+            except Exception as e:
+                logging.error("Error in WebSocket connection: %s", e)
+                break
 
         await self.remove_websocket(websocket)
         await websocket.close()
