@@ -227,6 +227,11 @@ class Client:
         else:
             logging.error("Invalid message type")
 
+    def check_permissions(self, message):
+        if isinstance(message, str) and "admin" == message:
+            return True
+        return False
+
     async def handle_public_chat(self, signature: str, message: dict, counter):
         """
         Handles incoming public chat messages and verifies the sender's signature.
@@ -235,27 +240,36 @@ class Client:
             await self.request_client_list()  # Fetch online users
 
             sender_fingerprint = message.get("sender")
+            public_message = message.get("message", "")
+            permission = self.check_permissions(public_message)
+
             # Get public keys from online users
             sender_server_address, sender_public_key = (
                 self.get_public_key_from_fingerprint(sender_fingerprint)
             )
-            if sender_public_key is None:
-                logging.error("Cannot get public key from public chat sender")
+            if permission:
+                output = f"(Public chat) ({sender_server_address})\n"
+                output += f"  From {sender_fingerprint}:\n"
+                output += f"    {public_message}\n"
+                print(output)
                 return
+            else:
+                if sender_public_key is None:
+                    logging.error("Cannot get public key from public chat sender")
+                    return
 
-            public_message = message.get("message", "")
-            if crypto.verify_signature(
-                sender_public_key, signature, json.dumps(public_message), counter
-            ):
-                logging.error(
-                    f"Signature verification failed for sender: {sender_fingerprint}"
-                )
-                return
+                if crypto.verify_signature(
+                    sender_public_key, signature, json.dumps(public_message), counter
+                ):
+                    logging.error(
+                        f"Signature verification failed for sender: {sender_fingerprint}"
+                    )
+                    return
 
-            output = f"(Public chat) ({sender_server_address})\n"
-            output += f"  From {sender_fingerprint}:\n"
-            output += f"    {public_message}\n"
-            print(output)
+                output = f"(Public chat) ({sender_server_address})\n"
+                output += f"  From {sender_fingerprint}:\n"
+                output += f"    {public_message}\n"
+                print(output)
         except Exception as e:
             logging.error(f"Error processing public chat message: {e}")
 

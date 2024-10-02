@@ -157,7 +157,6 @@ class Server:
         counter = message.get("counter", None)
         if counter == 4:
             await self.reset_counters(websocket)
-            logging.warning(f"{websocket} invoked reset_counter function {counter}")
 
         if message_type == "client_list_request":
             await self.send_client_list(websocket)
@@ -218,16 +217,12 @@ class Server:
             logging.error(f"{self.url}: Type not found for this message: {message}")
 
     async def reset_counters(self, websocket):
-        logging.warning("this is a test to reset counter")
         for client_ws in self.clients:
             if client_ws != websocket:
                 client_data = self.clients.get(client_ws, {})
                 if "counter" in client_data:
                     client_data["counter"] += 3
                     self.clients[client_ws]["counter"] = client_data["counter"]
-                    logging.info(
-                        f"Resetting counter for client {client_ws}. Previous counter: {client_data['counter']}"
-                    )
 
     async def send_response(
         self, websocket: websocket_server.ServerConnection, message
@@ -274,10 +269,7 @@ class Server:
 
         # Check if the counter is larger or equal to the counter saved in the server
         sender["counter"] = sender.get("counter", "0")
-        logging.info(
-            f"{sender['counter']} that was found in server vs sender's counter {message['counter']}"
-        )
-
+        logging.info(f"{message["counter"]} counter in message vs {sender["counter"]}")
         if int(message["counter"]) < int(sender["counter"]):
             logging.error(f"{self.url} message with replay attack detected")
             return False
