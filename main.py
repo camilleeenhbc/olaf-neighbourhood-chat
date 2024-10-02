@@ -40,9 +40,9 @@ async def handle_online_users(client: Client):
 
     print("Online users:")
     for server, clients in client.online_users.items():
-        for public_key in clients:
-            fingerprint = crypto.generate_fingerprint(public_key)
-            tag = "(you)" if public_key == client.public_key else ""
+        for client in clients:
+            fingerprint = client["fingerprint"]
+            tag = "(you)" if fingerprint == client.fingerprint else ""
             print(f"- {tag} ({server}) {fingerprint}")
 
     print("\n")

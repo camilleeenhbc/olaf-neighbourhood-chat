@@ -33,8 +33,9 @@ class Client:
         self.fingerprint = crypto.generate_fingerprint(self.public_key)
         self.websocket = None
 
-        # List of currently online users { server_address1: [client public key 1, client public key 2, ...] }
-        self.online_users: Dict[str, List[rsa.RSAPublicKey]] = {}
+        # List of currently online users
+        # { server_address1: [{public_key, fingerprint}, {public_key, fingerprint}] }
+        self.online_users: Dict[str, List[Dict]] = {}
 
         self.client_list_event = asyncio.Event()
 
@@ -45,10 +46,10 @@ class Client:
         Retrieve a public key using the sender's fingerprint from the online users list.
         """
         for server, clients in self.online_users.items():
-            for public_key in clients:
-                client_fingerprint = crypto.generate_fingerprint(public_key)
+            for client in clients:
+                client_fingerprint = client["fingerprint"]
                 if client_fingerprint == fingerprint:
-                    return (server, public_key)
+                    return (server, client["public_key"])
         return (None, None)
 
     def get_public_keys_from_fingerprints(
@@ -65,12 +66,12 @@ class Client:
             )
 
         for server, clients in self.online_users.items():
-            for public_key in clients:
-                client_fingerprint = crypto.generate_fingerprint(public_key)
+            for client in clients:
+                client_fingerprint = client["fingerprint"]
                 if client_fingerprint in fingerprints:
                     public_keys[fingerprints.index(client_fingerprint)] = (
                         server,
-                        public_key,
+                        client["public_key"],
                     )
 
         if None in public_keys:
@@ -204,7 +205,12 @@ class Client:
             self.online_users[server_address] = []
             for i, public_key in enumerate(clients):
                 public_key = crypto.load_pem_public_key(public_key)
-                self.online_users[server_address].append(public_key)
+                self.online_users[server_address].append(
+                    {
+                        "public_key": public_key,
+                        "fingerprint": crypto.generate_fingerprint(public_key),
+                    }
+                )
 
         self.client_list_event.set()
 
