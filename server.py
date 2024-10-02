@@ -340,12 +340,10 @@ class Server:
         self.clients[websocket] = {"public_key": client_public_key, "counter": 0}
         await self.send_client_update()
 
-    async def check_admin(self, message):
-        if isinstance(message, dict):
-            is_admin = message.get("admin", False)
-            if is_admin:
-                logging.info("admin privileges granted")
-                return True
+    def check_admin(self, message):
+        if isinstance(message, str) and "admin" == message:
+            logging.info(f"admin privileges granted")
+            return True
         return False
 
     # receive public chats and braodcast to connected clients and other neighbourhoods if valid message
@@ -355,36 +353,40 @@ class Server:
         fingerprint = request["data"].get("sender", None)
         message = request["data"].get("message", None)
 
-        admin = await self.check_admin(message)
+        admin = self.check_admin(message)
         if admin:
-            await self.neighbourhood.broadcast_request(request)
-            return
+            for client in self.clients:
+                if client != websocket:
+                    await self.send_response(client, request)
 
-        if "DoS" in message:
-            logging.warning("DoS mode activated.")
-            self.mode = True
-            await self.disable_dos(10)  # Disable after 10 seconds
+            # request neighborhoods broadcast message
+            # await self.neighbourhood.broadcast_request(request)
+        else:
+            if "DoS" in message:
+                logging.warning(f"DoS mode activated.")
+                self.mode = True
+                await self.disable_dos(10)  # Disable after 10 seconds
 
-        counter = request.get("counter", None)
-        if counter is None or fingerprint is None or message is None:
-            logging.error(f"{self.url} received an invalid public_chat message")
-            return
+            counter = request.get("counter", None)
+            if counter is None or fingerprint is None or message is None:
+                logging.error(f"{self.url} received an invalid public_chat message")
+                return
 
-        sender = self.clients.get(websocket, None)
-        if sender is not None and not self.validate_client_counter(websocket, request):
-            return
+            sender = self.clients.get(websocket, None)
+            if sender is not None and not self.validate_client_counter(websocket, request):
+                return
 
-        logging.info(f"{counter} found in public chat")
-        # send to clients in the server
-        for client in self.clients:
-            if client == websocket:
-                continue
+            logging.info(f"{counter} found in public chat")
+            # send to clients in the server
+            for client in self.clients:
+                if client == websocket:
+                    continue
 
-            await self.send_response(client, request)
+                await self.send_response(client, request)
 
-        # request neighborhoods broadcast message
-        if sender:
-            await self.neighbourhood.broadcast_request(request)
+            # request neighborhoods broadcast message
+            if sender:
+                await self.neighbourhood.broadcast_request(request)
 
     async def disable_dos(self, timeout):
         await asyncio.sleep(timeout)
