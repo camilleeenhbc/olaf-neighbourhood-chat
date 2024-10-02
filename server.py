@@ -57,7 +57,6 @@ class Server:
 
     async def connect_to_neighbourhood(self):
         """Create client connections for every neighbour servers"""
-        logging.info(self.neighbour_servers)
         for neighbour_url in self.neighbour_servers:
             await self.connect_to_neighbour(neighbour_url)
 

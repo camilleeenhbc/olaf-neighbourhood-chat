@@ -40,8 +40,8 @@ async def handle_online_users(client: Client):
 
     print("Online users:")
     for server, clients in client.online_users.items():
-        for client in clients:
-            fingerprint = client["fingerprint"]
+        for c in clients:
+            fingerprint = c["fingerprint"]
             tag = "(you)" if fingerprint == client.fingerprint else ""
             print(f"- {tag} ({server}) {fingerprint}")
 
