@@ -3,17 +3,16 @@ import sys
 import json
 import os
 import src.utils.crypto as crypto
-import base64
 import asyncio
+import uuid
 import websockets
 import websockets.asyncio.server as websocket_server
 from typing import List, Optional
 from aiohttp import web
-import uuid
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
 
-
-from src.neighbourhood import Neighbourhood
-from src.utils.message import Message
+from src.server_as_client import ServerAsClient
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
@@ -24,14 +23,25 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 
 
 class Server:
-    def __init__(self, url: str = "localhost:80", neighbours: List[str] = []) -> None:
+    def __init__(self, url: str = "localhost:80") -> None:
         self._websocket_server: Optional[websocket_server.Server] = None
 
         self.url = url
 
-        self.neighbour_servers = neighbours
+        self.counter = 0
+        self.private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,  # modulus length
+            backend=default_backend(),
+        )
+        self.public_key = crypto.load_pem_public_key(
+            crypto.export_public_key(self.private_key.public_key())
+        )
+
+        # server address: {server public key, server counter}
+        self.neighbour_servers = {}
         self.neighbour_websockets = {}  # Websocket (ServerConnection): Neighbour URL
-        self.neighbourhood = Neighbourhood(self.url)
+        self.neighbourhood = ServerAsClient(self)
 
         # {websocket: {public_key, fingerprint, counter}}
         self.clients = {}  # List of clients connecting to this server
@@ -46,6 +56,7 @@ class Server:
 
     async def connect_to_neighbourhood(self):
         """Create client connections for every neighbour servers"""
+        logging.info(self.neighbour_servers)
         for neighbour_url in self.neighbour_servers:
             await self.connect_to_neighbour(neighbour_url)
 
@@ -60,9 +71,11 @@ class Server:
         try:
             websocket = await websockets.connect(f"ws://{neighbour_url}")
             await self.neighbourhood.add_active_server(neighbour_url, websocket)
-            logging.debug(f"{self.url} connect to neighbour {neighbour_url}")
+            logging.info(f"{self.url} connects to neighbour {neighbour_url}")
         except Exception as e:
-            logging.error(f"{self.url} failed to connect to neighbour {neighbour_url}")
+            logging.error(
+                f"{self.url} failed to connect to neighbour {neighbour_url}: {e}"
+            )
 
     async def start(self):
         """
@@ -73,9 +86,6 @@ class Server:
             self._websocket_server = await websocket_server.serve(
                 self.listen, address, port
             )
-            # await self.connect_to_neighbourhood()
-            # await self.request_client_update()
-            # await self._websocket_server.wait_closed()
 
             await asyncio.gather(
                 self.start_http_server(address, port),  # Start the HTTP server
@@ -92,8 +102,9 @@ class Server:
         self.clients = {}
         await self.send_client_update()
 
-        self._websocket_server.close()
-        await self._websocket_server.wait_closed()
+        if self._websocket_server:
+            self._websocket_server.close()
+            await self._websocket_server.wait_closed()
 
     async def listen(self, websocket):
         """
@@ -197,7 +208,7 @@ class Server:
             elif message_type == "public_chat":
                 await self.receive_public_chat(websocket, message)
             elif message_type == "server_hello":
-                await self.receive_server_hello(websocket, data)
+                await self.receive_server_hello(websocket, message)
             else:
                 logging.error(f"{self.url}: Type not found for this message: {message}")
         else:
@@ -221,12 +232,34 @@ class Server:
         except Exception as e:
             logging.error(f"{self.url} failed to send response: {e}")
 
-    async def receive_server_hello(self, websocket, data):
-        neighbour_url = data["sender"]
-        self.neighbour_websockets[websocket] = neighbour_url
+    async def receive_server_hello(self, websocket, message):
+        counter = int(message.get("counter", "0"))
+        signature = message.get("signature", None)
+        data = message.get("data", {})
 
-        # Connect to neighbour in case the neighbour server starts after this server
-        await self.connect_to_neighbour(neighbour_url)
+        # Validate counter
+        sender_address = data["sender"]
+
+        recorded_counter = self.neighbour_servers[sender_address].get("counter", 0)
+        if counter < recorded_counter:
+            logging.error(f"{self.url} receives server_hello with wrong counter")
+            return
+
+        self.neighbour_servers[sender_address]["counter"] = recorded_counter
+
+        # Verify signature
+        public_key = self.neighbour_servers[sender_address].get("public_key", None)
+        public_key = crypto.load_pem_public_key(public_key)
+        if not crypto.verify_signature(
+            public_key, signature, json.dumps(data), counter
+        ):
+            logging.error(f"{self.url} cannot verify signature for server_hello")
+            return
+
+        logging.info(f"{self.url} accepts server hello from {sender_address}")
+        # Map the server connection to this address and establish a client connection
+        self.neighbour_websockets[websocket] = sender_address
+        await self.connect_to_neighbour(sender_address)
 
     def validate_counter(self, websocket, message):
         # backdoor no.4
@@ -275,7 +308,7 @@ class Server:
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
-        if self.url not in destination_servers and not self.validate_counter(
+        if self.url not in destination_servers and not self.validate_client_counter(
             websocket, message
         ):
             return
@@ -327,7 +360,7 @@ class Server:
             return
 
         sender = self.clients.get(websocket, None)
-        if sender is not None and not self.validate_counter(websocket, request):
+        if sender is not None and not self.validate_client_counter(websocket, request):
             return
 
         # send to clients in the server
@@ -500,24 +533,3 @@ class Server:
                 )
 
         return web.Response(status=404, text="File not found.")
-
-
-if __name__ == "__main__":
-    # Arguments: server_url num_neighbours neighbour1_url neighbour2_url ...
-    # Example: localhost:8080 2 localhost:8081 localhost:8081
-    server_url = sys.argv[1]
-    num_neighbours = int(sys.argv[2])
-    neighbours = []
-    for i in range(num_neighbours):
-        neighbours.append(sys.argv[3 + i])
-
-    # Start server
-    server = Server(server_url, neighbours)
-
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(server.start())
-    except:
-        loop.run_until_complete(server.stop())
-    finally:
-        loop.close()

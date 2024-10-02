@@ -1,15 +1,12 @@
-import sys
 import asyncio
 import logging
 import src.utils.crypto as crypto
 from client import Client
-
-# logging.basicConfig(level=logging.ERROR)
-# logging.disable()
+from argparse import ArgumentParser
 
 
 async def prompt_input(prompt=""):
-    return await asyncio.to_thread(input, prompt)
+    return await asyncio.to_thread(input, f"{prompt}\n")
 
 
 async def get_client_inputs(client: Client):
@@ -39,7 +36,6 @@ async def get_client_inputs(client: Client):
 
 async def handle_online_users(client: Client):
     await client.request_client_list()
-    await client.client_list_event.wait()
 
     for clients in client.online_users.values():
         for public_key in clients:
@@ -143,8 +139,19 @@ async def main(client: Client):
     )
 
 
-# Arguments: server_url
-server_url = sys.argv[1]
+parser = ArgumentParser()
+parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
+parser.add_argument("--url", type=str, help="Server URL")
+
+args = parser.parse_args()
+
+if args.debug:
+    logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
+else:
+    logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.WARNING)
+
+
+server_url = args.url
 
 # Client connects to server
 client = Client(server_url)

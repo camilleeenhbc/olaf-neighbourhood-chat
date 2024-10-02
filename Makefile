@@ -1,12 +1,9 @@
-server1:
-	python3 server.py localhost:8080 2 localhost:8081 localhost:8082
-
-server2:
-	python3 server.py localhost:8081 2 localhost:8080 localhost:8082
+server:
+	python neighbourhood.py --start --urls localhost:8080 localhost:8081
 
 client1:
-	python3 main.py localhost:8080
+	python main.py -d --url localhost:8080
 
 client2:
-	python3 main.py localhost:8081
+	python main.py -d --url localhost:8081
 

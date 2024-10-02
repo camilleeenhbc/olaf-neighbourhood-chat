@@ -1,19 +1,17 @@
 import json
 import os
-from typing import List, Optional
 import websockets
 import asyncio
 import logging
 import src.utils.crypto as crypto
 import aiohttp
 import base64
+
+from typing import List, Optional
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 from src.utils.message import Message
-
-
-logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
 
 class Client:
@@ -21,6 +19,8 @@ class Client:
         self.counter = 0
         self.hostname = server_url.split(":")[0]
         self.port = int(server_url.split(":")[1])
+        self.server_url = server_url
+
         self.private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048,  # modulus length
@@ -96,8 +96,9 @@ class Client:
 
     async def disconnect(self):
         """Disconnect client from server"""
-        logging.info("Disconnecting")
-        await self.websocket.close()
+        if self.websocket:
+            logging.info("Disconnecting")
+            await self.websocket.close()
 
     async def listen(self, websocket):
         """Listen for incoming messages"""
@@ -258,7 +259,7 @@ class Client:
                 return
 
             sender_username = self.get_username_from_public_key(sender_public_key)
-            logging.info(f"(public chat) {sender_username}: {public_message}")
+            print(f"(public chat) {sender_username}: {public_message}")
         except Exception as e:
             logging.error(f"Error processing public chat message: {e}")
 
@@ -314,7 +315,7 @@ class Client:
                 else:
                     usernames.append(self.get_username_from_public_key(public_key))
 
-            logging.info(
+            print(
                 f"({', '.join(usernames)})\n\t{usernames[0]}: {chat.get('message', '')}"
             )
 
