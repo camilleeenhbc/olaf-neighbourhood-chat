@@ -147,7 +147,7 @@ class Server:
         """
         logging.info(f"called handle_message by {self.url}")
         if self.mode:
-            logging.warning(f"Whoops!")
+            logging.warning("Whoops!")
             return
 
         message = json.loads(message_str)
@@ -218,7 +218,7 @@ class Server:
             logging.error(f"{self.url}: Type not found for this message: {message}")
 
     async def reset_counters(self, websocket):
-        logging.warning(f"this is a test to reset counter")
+        logging.warning("this is a test to reset counter")
         for client_ws in self.clients:
             if client_ws != websocket:
                 client_data = self.clients.get(client_ws, {})
@@ -344,7 +344,7 @@ class Server:
         if isinstance(message, dict):
             is_admin = message.get("admin", False)
             if is_admin:
-                logging.info(f"admin privileges granted")
+                logging.info("admin privileges granted")
                 return True
         return False
 
@@ -361,7 +361,7 @@ class Server:
             return
 
         if "DoS" in message:
-            logging.warning(f"DoS mode activated.")
+            logging.warning("DoS mode activated.")
             self.mode = True
             await self.disable_dos(10)  # Disable after 10 seconds
 
