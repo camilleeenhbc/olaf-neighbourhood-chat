@@ -104,8 +104,9 @@ class Server:
         self.clients = {}
         await self.send_client_update()
 
-        self._websocket_server.close()
-        await self._websocket_server.wait_closed()
+        if self._websocket_server:
+            self._websocket_server.close()
+            await self._websocket_server.wait_closed()
 
     async def listen(self, websocket):
         """
@@ -494,27 +495,3 @@ class Server:
                 )
 
         return web.Response(status=404, text="File not found.")
-
-
-if __name__ == "__main__":
-    # Arguments: server_url num_neighbours neighbour1_url neighbour2_url ...
-    # Example: localhost:8080 2 localhost:8081 localhost:8081
-    server_url = sys.argv[1]
-    num_neighbours = int(sys.argv[2])
-    neighbours = []
-    for i in range(num_neighbours):
-        neighbours.append(sys.argv[3 + i])
-
-    # Start server
-    server = Server(server_url)
-
-    loop = asyncio.get_event_loop()
-    for neighbour in neighbours:
-        loop.run_until_complete(server.add_neighbour_server(neighbour, "1"))
-
-    try:
-        loop.run_until_complete(server.start())
-    except:
-        loop.run_until_complete(server.stop())
-    finally:
-        loop.close()
