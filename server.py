@@ -269,7 +269,8 @@ class Server:
 
         # Check if the counter is larger or equal to the counter saved in the server
         sender["counter"] = sender.get("counter", "0")
-        logging.info(f"{message["counter"]} counter in message vs {sender["counter"]}")
+
+
         if int(message["counter"]) < int(sender["counter"]):
             logging.error(f"{self.url} message with replay attack detected")
             return False
@@ -296,7 +297,7 @@ class Server:
 
     # recieve private chat
     async def receive_chat(self, websocket, message):
-        destination_servers = message["data"].get("destination_servers", [])
+        destination_servers = message["data"].get("destination_servers", None)
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
@@ -365,7 +366,9 @@ class Server:
                 return
 
             sender = self.clients.get(websocket, None)
-            if sender is not None and not self.validate_client_counter(websocket, request):
+            if sender is not None and not self.validate_client_counter(
+                websocket, request
+            ):
                 return
 
             logging.info(f"{counter} found in public chat")
