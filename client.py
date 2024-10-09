@@ -245,8 +245,8 @@ class Client:
                 return
 
             public_message = message.get("message", "")
-            if crypto.verify_signature(
-                sender_public_key, signature, json.dumps(public_message), counter
+            if not crypto.verify_signature(
+                sender_public_key, signature, json.dumps(message), counter
             ):
                 logging.error(
                     f"Signature verification failed for sender: {sender_fingerprint}"
