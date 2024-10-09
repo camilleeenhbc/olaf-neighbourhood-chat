@@ -3,7 +3,6 @@ import hashlib
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
-from cryptography.exceptions import InvalidSignature
 
 
 def generate_fingerprint(public_key: rsa.RSAPublicKey):
