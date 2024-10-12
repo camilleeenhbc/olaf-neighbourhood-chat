@@ -276,7 +276,6 @@ class Server:
         if isinstance(data, str):
             data = json.loads(data)
         destination_servers = data.get("destination_servers", [])
-        print(destination_servers)
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
