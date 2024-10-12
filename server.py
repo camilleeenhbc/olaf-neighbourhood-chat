@@ -143,7 +143,9 @@ class Server:
         Handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        message = json.loads(message_str) if isinstance(message_str, str) else message_str
+        message = (
+            json.loads(message_str) if isinstance(message_str, str) else message_str
+        )
         message_type = message.get("type", None)
 
         if message_type == "client_list_request":
@@ -269,11 +271,12 @@ class Server:
         return None
 
     # recieve private chat
-    async def receive_chat(self, websocket, message): 
+    async def receive_chat(self, websocket, message):
         data = message.get("data")
         if isinstance(data, str):
             data = json.loads(data)
         destination_servers = data.get("destination_servers", [])
+        print(destination_servers)
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 
@@ -282,16 +285,13 @@ class Server:
         ):
             return
 
-        # Handle chat message in the destination server
-        if self.url in destination_servers:
-            logging.info(f"{self.url} receives chat as the destination server")
-
-            for client_websocket in self.clients:
-                await self.send_response(client_websocket, message)
-
-        else:
-            # forward the message to destination servers
-            for server_url in destination_servers:
+        for server_url in destination_servers:
+            if self.url == server_url:
+                logging.info(f"{self.url} receives chat as the destination server")
+                for client_websocket in self.clients:
+                    await self.send_response(client_websocket, message)
+            else:
+                # forward the message to destination servers
                 websocket = self.neighbourhood.find_active_server(server_url)
                 if websocket is None:
                     logging.error(
