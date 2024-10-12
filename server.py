@@ -143,8 +143,7 @@ class Server:
         Handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
         """
-        message = json.loads(message_str)
-
+        message = json.loads(message_str) if isinstance(message_str, str) else message_str
         message_type = message.get("type", None)
 
         if message_type == "client_list_request":
@@ -154,10 +153,8 @@ class Server:
         elif message_type == "client_update":
             self.receive_client_update(websocket, message)
         elif message_type == "signed_data":
-            # TODO: Handle counter and signature
             counter = message.get("counter", None)
             signature = message.get("signature", None)
-
             if counter is None or signature is None:
                 logging.error(
                     f"Cannot find counter or signature in this message: {message}"
@@ -171,23 +168,22 @@ class Server:
                 )
                 return
 
+            # Verify the signature if the client is known
             if websocket in self.clients:
                 public_key = self.clients[websocket]["public_key"]
                 public_key = crypto.load_pem_public_key(public_key)
-                if not crypto.verify_signature(
-                    public_key, signature, json.dumps(data), counter
-                ):
+
+                if not crypto.verify_signature(public_key, signature, data, counter):
                     logging.error(
                         f"{self.url} message with invalid signature detected: {message_str}"
                     )
                     return
 
-            if isinstance(data, str):
-                data = json.loads(data)
+            data = json.loads(data) if isinstance(data, str) else data
 
-            message["data"] = data
+            message["data"] = data  # Ensure data is parsed JSON object
 
-            # Handle chats
+            # Further processing based on `data["type"]`
             message_type = data.get("type", None)
             logging.info(f"{self.url} receives {message_type} message")
             if message_type == "chat":
@@ -273,8 +269,11 @@ class Server:
         return None
 
     # recieve private chat
-    async def receive_chat(self, websocket, message):
-        destination_servers = message["data"].get("destination_servers", [])
+    async def receive_chat(self, websocket, message): 
+        data = message.get("data")
+        if isinstance(data, str):
+            data = json.loads(data)
+        destination_servers = data.get("destination_servers", [])
         if destination_servers is None:
             logging.error(f"{self.url} receives invalid chat message: {message}")
 

@@ -159,11 +159,12 @@ class Client:
         # Inrement counter
         self.counter += 1
 
+        message_string = json.dumps(message_data)
         signed_message = {
             "type": "signed_data",
-            "data": message_data,
+            "data": message_string,
             "counter": self.counter,
-            "signature": self.sign_message(json.dumps(message_data)),
+            "signature": self.sign_message(message_string),
         }
 
         await websocket.send(json.dumps(signed_message))
@@ -286,22 +287,22 @@ class Client:
 
             chat = json.loads(chat)
             participants: list = chat.get("participants", [])
+            sender_fingerprint = participants[0]
 
             # Get sender's public key from fingerprint
-            public_keys = self.get_public_keys_from_fingerprints(participants)
-            if len(public_keys) == 0:
-                logging.error("Cannot get public keys for every participants")
-                return
-
-            sender_server_address, sender_public_key = public_keys[0]
+            sender_server_address, sender_public_key = (
+                self.get_public_key_from_fingerprint(sender_fingerprint)
+            )
             if sender_public_key is None:
-                logging.error("Cannot get public key from chat sender")
+                logging.error("Cannot get public key from public chat sender")
                 return
 
-            if crypto.verify_signature(
+            if not crypto.verify_signature(
                 sender_public_key, signature, json.dumps(message), counter
             ):
-                logging.error("Signature verification failed for sender")
+                logging.error(
+                    f"Signature verification failed for sender {sender_fingerprint}"
+                )
                 return
 
             output = f"(Chat) ({', '.join(participants)})\n"

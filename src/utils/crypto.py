@@ -3,6 +3,7 @@ import hashlib
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
+from cryptography.exceptions import InvalidSignature
 
 
 def generate_fingerprint(public_key: rsa.RSAPublicKey):
@@ -32,7 +33,7 @@ def sign_message(message: str, counter, private_key: rsa.RSAPrivateKey):
     """Returns the signature after signing the message"""
     # Sign the message using the RSA-PSS scheme
     # Signature should be Base64 of data + counter
-    message_bytes = message.encode() + str(counter).encode()
+    message_bytes = message.encode('utf-8') + str(counter).encode('utf-8')
     signature = private_key.sign(
         message_bytes,
         padding.PSS(
@@ -41,7 +42,7 @@ def sign_message(message: str, counter, private_key: rsa.RSAPrivateKey):
         ),
         hashes.SHA256(),
     )
-    return base64.b64encode(signature).decode()
+    return base64.b64encode(signature).decode('utf-8')
 
 
 def verify_signature(
@@ -49,7 +50,7 @@ def verify_signature(
 ):
     try:
         # Verify signature using sender's public key and the original message data
-        message_bytes = message.encode() + str(counter).encode()
+        message_bytes = message.encode('utf-8') + str(counter).encode('utf-8')
         public_key.verify(
             base64.b64decode(signature),
             message_bytes,
@@ -60,5 +61,9 @@ def verify_signature(
             hashes.SHA256(),
         )
         return True
-    except Exception:
+    except InvalidSignature:
+        print("Invalid signature.")
+        return False
+    except Exception as e:
+        print("An error occurred:", e)
         return False

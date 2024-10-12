@@ -85,7 +85,7 @@ class ServerAsClient:
 
         request = {
             "type": "signed_data",
-            "data": data,
+            "data": json.dumps(data),
             "counter": self.server.counter,
             "signature": crypto.sign_message(
                 json.dumps(data), self.server.counter, self.server.private_key

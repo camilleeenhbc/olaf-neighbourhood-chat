@@ -19,7 +19,7 @@ aiohttp==3.10.7
 
 ### Set up virtual environment
 ```bash
-python3 -m venv .env
+python3 -m venv .venv
 source .venv/bin/activate
 ```
 

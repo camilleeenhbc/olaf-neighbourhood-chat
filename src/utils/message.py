@@ -103,4 +103,4 @@ class Message:
             "chat": base64.b64encode(self.encrypted_content).decode(),
         }
 
-        return json.dumps(chat_message, indent=2)
+        return chat_message
