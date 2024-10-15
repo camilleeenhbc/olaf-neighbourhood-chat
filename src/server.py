@@ -284,13 +284,16 @@ class Server:
         ):
             return
 
-        for server_url in destination_servers:
-            if self.url == server_url:
-                logging.info(f"{self.url} receives chat as the destination server")
-                for client_websocket in self.clients:
-                    await self.send_response(client_websocket, message)
-            else:
-                # forward the message to destination servers
+        # Handle chat message in the destination server
+        if self.url in destination_servers:
+            logging.info(f"{self.url} receives chat as the destination server")
+
+            for client_websocket in self.clients:
+                await self.send_response(client_websocket, message)
+
+        else:
+            # forward the message to destination servers
+            for server_url in destination_servers:
                 websocket = self.neighbourhood.find_active_server(server_url)
                 if websocket is None:
                     logging.error(
@@ -300,6 +303,24 @@ class Server:
 
                 logging.info(f"{self.url} forwards private chat to {server_url}")
                 await self.neighbourhood.send_request(websocket, message)
+
+        # SEND HELP: THIS IS WHERE IT GOT TO INFINITE LOOP IN NEIGHBOURHOOD SIDE
+        # for server_url in destination_servers:
+        #     if self.url == server_url:
+        #         logging.info(f"{self.url} receives chat as the destination server")
+        #         for client_websocket in self.clients:
+        #             await self.send_response(client_websocket, message)
+        #     else:
+        #         # forward the message to destination servers
+        #         websocket = self.neighbourhood.find_active_server(server_url)
+        #         if websocket is None:
+        #             logging.error(
+        #                 f"{self.url} cannot find destination server {server_url}"
+        #             )
+        #             continue
+
+        #         logging.info(f"{self.url} forwards private chat to {server_url}")
+        #         await self.neighbourhood.send_request(websocket, message)
 
     async def receive_hello(self, websocket, message):
         """Save client's public key and send client update to other servers"""
