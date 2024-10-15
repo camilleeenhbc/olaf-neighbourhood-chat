@@ -2,7 +2,7 @@ import json
 import websockets
 import asyncio
 import logging
-import src.utils.crypto as crypto
+import utils.crypto as crypto
 import aiohttp
 import base64
 
@@ -10,7 +10,7 @@ from typing import List, Optional, Union, Dict
 from websockets import connect
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
-from src.utils.message import Message
+from utils.message import Message
 
 
 class Client:
