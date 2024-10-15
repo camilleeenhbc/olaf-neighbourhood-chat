@@ -1,6 +1,6 @@
 import json
 import logging
-import utils.crypto as crypto
+import src.utils.crypto as crypto
 
 from websockets import WebSocketClientProtocol
 from typing import List

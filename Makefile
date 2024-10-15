@@ -7,3 +7,6 @@ client1:
 client2:
 	python main.py -d --url localhost:8081
 
+test:
+	pytest src/test/*
+

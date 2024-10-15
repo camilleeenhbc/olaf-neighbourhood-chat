@@ -1,7 +1,7 @@
 import asyncio
 import logging
-import utils.crypto as crypto
-from client import Client
+import src.utils.crypto as crypto
+from src.client import Client
 from argparse import ArgumentParser
 
 

@@ -1,7 +1,7 @@
 import logging
 import json
 import os
-import utils.crypto as crypto
+import src.utils.crypto as crypto
 import asyncio
 import uuid
 import websockets
@@ -11,7 +11,7 @@ from aiohttp import web
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
-from server_as_client import ServerAsClient
+from src.server_as_client import ServerAsClient
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 

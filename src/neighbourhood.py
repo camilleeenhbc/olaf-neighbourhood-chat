@@ -1,9 +1,9 @@
 import asyncio
 import logging
-import utils.crypto as crypto
+import src.utils.crypto as crypto
 
 from typing import Dict
-from server import Server
+from src.server import Server
 from argparse import ArgumentParser
 
 
