@@ -93,12 +93,15 @@ class Message:
 
     def prepare_chat_message(
         self,
-        recipient_public_keys: List[rsa.RSAPublicKey],
-        destination_servers,
+        recipient_public_keys: Optional[List[rsa.RSAPublicKey]],
+        destination_servers: Optional[List[str]],
         participants: Optional[List[str]] = None,
     ):
         """Prepare an encrypted chat message, including AES key encryption."""
         self.participants = [] if participants is None else participants
+        recipient_public_keys = (
+            [] if recipient_public_keys is None else recipient_public_keys
+        )
 
         # Encrypt the message and generate keys
         self.encrypt_chat_message(recipient_public_keys)

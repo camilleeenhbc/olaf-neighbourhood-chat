@@ -10,8 +10,6 @@ from typing import Optional
 import websockets
 import websockets.asyncio.server as websocket_server
 from aiohttp import web
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 from .server_as_client import ServerAsClient
 from .utils import crypto
@@ -31,18 +29,10 @@ class Server:
 
     def __init__(self, url: str = "localhost:80") -> None:
         self._websocket_server: Optional[websocket_server.Server] = None
-
         self.url = url
 
         self.counter = 0
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,  # modulus length
-            backend=default_backend(),
-        )
-        self.public_key = crypto.load_pem_public_key(
-            crypto.export_public_key(self.private_key.public_key())
-        )
+        self.private_key, self.public_key = crypto.generate_private_public_keys()
 
         # server address: {server public key, server counter}
         self.neighbour_servers = {}

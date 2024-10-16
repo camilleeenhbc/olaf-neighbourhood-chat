@@ -8,7 +8,6 @@ from typing import Dict, List, Optional, Union
 
 import aiohttp
 import websockets
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from websockets import connect
 
@@ -25,14 +24,7 @@ class Client:
         self.port = int(server_url.split(":")[1])
         self.server_url = server_url
 
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,  # modulus length
-            backend=default_backend(),
-        )
-        self.public_key = crypto.load_pem_public_key(
-            crypto.export_public_key(self.private_key.public_key())
-        )
+        self.private_key, self.public_key = crypto.generate_private_public_keys()
 
         self.fingerprint = crypto.generate_fingerprint(self.public_key)
         self.websocket = None
@@ -91,17 +83,16 @@ class Client:
     async def connect_to_server(self):
         """Create connection to server"""
         try:
-            self.websocket = await connect(f"ws://{self.hostname}:{self.port}")
-            logging.info("Connected to %s:%i", self.hostname, self.port)
+            self.websocket = await connect(f"ws://{self.server_url}")
+            logging.info("Connected to %s", self.server_url)
             await self.send_message(self.websocket, chat_type="hello")
             listen_thread = asyncio.create_task(self.listen(self.websocket))
             await self.request_client_list()  # fetch online users
             await listen_thread
         except websockets.ConnectionClosed:
-            logging.info("Disconnected")
-            await self.disconnect()
+            logging.info("Disconnected from %s", self.server_url)
         except Exception as e:
-            logging.error("Failed to connect to %s:%i: %s", self.hostname, self.port, e)
+            logging.error("Failed to connect to %s: %s", self.server_url, e)
         finally:
             await self.disconnect()
 
@@ -110,6 +101,7 @@ class Client:
         if self.websocket:
             logging.info("Disconnecting")
             await self.websocket.close()
+            self.websocket = None
 
     async def listen(self, websocket):
         """Listen for incoming messages"""
@@ -126,9 +118,9 @@ class Client:
         websocket,
         message_content="",
         chat_type="chat",
-        destination_servers=[],
-        recipient_public_keys: List[rsa.RSAPublicKey] = [],
-        participants=[],
+        destination_servers: Optional[List[str]] = None,
+        recipient_public_keys: Optional[List[rsa.RSAPublicKey]] = None,
+        participants: Optional[List[str]] = None,
     ):
         """
         Send different types of messages
@@ -328,11 +320,12 @@ class Client:
                 files = {"file": f}
                 # POST request
                 async with session.post(url, data=files) as response:
-                    if response.status == 200:
+                    if response.ok:
                         json_response = await response.json()
                         logging.info("File uploaded successfully.")
                         return json_response["response"]["body"]["file_url"]
-                    elif response.status == 413:
+
+                    if response.status == 413:
                         logging.error(
                             "File too large. Server returned 413 Payload Too Large."
                         )
@@ -350,32 +343,27 @@ class Client:
             # Create a new aiohttp session
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
-                    if response.status == 200:
-                        # Retrieve the filename from the headers
-                        content_disposition = response.headers.get(
-                            "Content-Disposition"
-                        )
-                        original_filename = content_disposition.split('filename="')[1][
-                            :-1
-                        ]
-
-                        # Save the file with its original filename
-                        with open(original_filename, "wb") as f:
-                            while True:
-                                chunk = await response.content.read(1024)
-                                if not chunk:
-                                    break
-                                f.write(chunk)
-
-                        logging.info(
-                            "File %s downloaded successfully.", original_filename
-                        )
-                    else:
+                    if not response.ok:
                         logging.error(
                             "Failed to download file: %i %s",
                             response.status,
                             await response.text(),
                         )
+                        return
+
+                    # Retrieve the filename from the headers
+                    content_disposition = response.headers.get("Content-Disposition")
+                    original_filename = content_disposition.split('filename="')[1][:-1]
+
+                    # Save the file with its original filename
+                    with open(original_filename, "wb") as f:
+                        while True:
+                            chunk = await response.content.read(1024)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+
+                    logging.info("File %s downloaded successfully.", original_filename)
         except aiohttp.ClientError as e:
             logging.error("Error downloading file: %s", e)
         except Exception as e:

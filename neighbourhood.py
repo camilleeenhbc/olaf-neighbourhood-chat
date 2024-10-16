@@ -20,6 +20,7 @@ class Neighbourhood:
         self.start_after_add = False
 
     async def add_server(self, server_address):
+        """Add a server to the neighbourhood and start the server if `start_after_add` is `True`"""
         if server_address in self.servers:
             print(f"Server {server_address} exists")
             return
@@ -43,6 +44,7 @@ class Neighbourhood:
             self.start_server(server_address)
 
     def start_server(self, server_address):
+        """Start a server"""
         server = self.servers.get(server_address, None)
         if server is None:
             print(f"Cannot find server {server_address} to start")
@@ -55,6 +57,7 @@ class Neighbourhood:
         self.server_threads[server_address] = asyncio.create_task(server.start())
 
     async def stop_server(self, server_address):
+        """Stop a server"""
         if server_address in self.servers:
             await self.servers[server_address].stop()
 
@@ -62,6 +65,7 @@ class Neighbourhood:
             await self.server_threads[server_address]
 
     async def stop_all(self):
+        """Stop all servers"""
         tasks = [
             asyncio.create_task(self.stop_server(address)) for address in self.servers
         ]
@@ -74,6 +78,7 @@ async def prompt_input(prompt=""):
 
 
 async def get_input(neighbourhood: Neighbourhood):
+    """Prompt neighbourhood inputs"""
     print("NEIGHBOURHOOD\n")
 
     print("INSTRUCTION")
@@ -92,7 +97,8 @@ async def get_input(neighbourhood: Neighbourhood):
     await neighbourhood.stop_all()
 
 
-async def handle_input(neighbourhood: Neighbourhood, input_result):
+async def handle_input(neighbourhood: Neighbourhood, input_result: str):
+    """Handle neighbourhood input"""
     try:
         command, server_address = input_result.split(" ")
     except Exception:
@@ -130,7 +136,7 @@ if __name__ == "__main__":
 
     try:
         loop.run_until_complete(get_input(neighbourhood))
-    except Exception:
+    except KeyboardInterrupt:
         loop.run_until_complete(neighbourhood.stop_all())
     finally:
         loop.close()

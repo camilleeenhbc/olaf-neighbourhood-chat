@@ -8,6 +8,18 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
 
 
+def generate_private_public_keys():
+    """Return a tuple of private and public keys"""
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,  # modulus length
+        backend=default_backend(),
+    )
+
+    public_key = load_pem_public_key(export_public_key(private_key.public_key()))
+    return private_key, public_key
+
+
 def generate_fingerprint(public_key: rsa.RSAPublicKey):
     """Generates a fingerprint based on the public key (hash)."""
     public_bytes = public_key.public_bytes(

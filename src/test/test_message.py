@@ -1,12 +1,13 @@
 # src/test/test_message.py
 
-import pytest
-import json
 import base64
-from cryptography.hazmat.primitives.asymmetric import rsa
+import json
+
+import pytest
 from cryptography.hazmat.backends import default_backend
-from src.utils.message import Message  # Update this import based on your file structure
-import src.utils.crypto as crypto
+from cryptography.hazmat.primitives.asymmetric import rsa
+
+from src.utils.message import Message
 
 
 # Generate RSA keys for testing

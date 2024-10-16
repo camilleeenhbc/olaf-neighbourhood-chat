@@ -1,13 +1,15 @@
 # src/test/test_client.py
 
-import pytest
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch, MagicMock
-from src.utils.crypto import generate_fingerprint, load_pem_public_key
-from src.client import Client
-from cryptography.hazmat.primitives.asymmetric import rsa
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+
+from src.client import Client
+from src.utils.crypto import generate_fingerprint
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,11 @@
 # src/test/test_server.py
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from aiohttp import web
+
 from src.server import Server
 
 
