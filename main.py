@@ -1,8 +1,9 @@
 import asyncio
 import logging
-import src.utils.crypto as crypto
-from src.client import Client
 from argparse import ArgumentParser
+
+from src import Client
+from src.utils import crypto
 
 
 async def prompt_input(prompt=""):

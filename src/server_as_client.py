@@ -1,9 +1,10 @@
 import json
 import logging
-import src.utils.crypto as crypto
+from typing import List
 
 from websockets import WebSocketClientProtocol
-from typing import List
+
+from .utils import crypto
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 

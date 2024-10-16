@@ -1,16 +1,17 @@
-import json
-import websockets
 import asyncio
-import logging
-import aiohttp
 import base64
+import json
+import logging
+from typing import Dict, List, Optional, Union
 
-from typing import List, Optional, Union, Dict
-from websockets import connect
-from cryptography.hazmat.primitives.asymmetric import rsa
+import aiohttp
+import websockets
 from cryptography.hazmat.backends import default_backend
-from src.utils.message import Message
-import src.utils.crypto as crypto
+from cryptography.hazmat.primitives.asymmetric import rsa
+from websockets import connect
+
+from .utils import crypto
+from .utils.message import Message
 
 
 class Client:

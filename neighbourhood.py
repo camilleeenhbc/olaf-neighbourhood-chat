@@ -1,11 +1,10 @@
 import asyncio
 import logging
-import src.utils.crypto as crypto
-
-from typing import Dict
-from src.server import Server
 from argparse import ArgumentParser
+from typing import Dict
 
+from src import Server
+from src.utils import crypto
 
 logger = logging.getLogger(__name__)
 
