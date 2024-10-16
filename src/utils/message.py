@@ -1,14 +1,18 @@
+"""Contains the `Message` class"""
+
 import json
 import base64
 import os
-from typing import List
+from typing import List, Optional
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # for AES
 from cryptography.hazmat.primitives import hashes
 
 
 class Message:
-    def __init__(self, content, message_type="chat", destination_servers=None):
+    """A message class that allows preparing a secured, encrypted message"""
+
+    def __init__(self, content, message_type="chat"):
         # assign the attributes
         self.content = content
         self.encrypted_content = None
@@ -20,8 +24,9 @@ class Message:
 
     # Function to encrypt the AES key
     @staticmethod
-    def encrypt_key(receiver_public_key: rsa.RSAPublicKey, aes_key: bytes):
-        encrypted_key = receiver_public_key.encrypt(
+    def encrypt_key(public_key: rsa.RSAPublicKey, aes_key: bytes):
+        """Encrypt the AES key using the public key"""
+        encrypted_key = public_key.encrypt(
             aes_key,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -33,10 +38,11 @@ class Message:
 
     # Decrypt the AES key
     @staticmethod
-    def decrypt_key(private_key: rsa.RSAPrivateKey, aesKey: str):
-        aesKey = base64.b64decode(aesKey)
+    def decrypt_key(private_key: rsa.RSAPrivateKey, aes_key: str):
+        """Decrypt the AES key using the private's key"""
+        aes_key = base64.b64decode(aes_key)
         return private_key.decrypt(
-            aesKey,
+            aes_key,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
@@ -44,10 +50,11 @@ class Message:
             ),
         )
 
-    # Encrypt message with AES key
-    # Perform AES in GCM mode
-    # Key length of 16 bytes (128 bits)
-    def encrypt_chat_message(self, receiver_public_keys):
+    def encrypt_chat_message(self, receiver_public_keys: List[rsa.RSAPublicKey]):
+        """
+        Encrypt message with AES key by performing AES in GCM mode.
+        Key length of 16 bytes (128 bits)
+        """
         # IV should be 16  bytes (randomly generated)
         self.iv = os.urandom(16)
         aes_key = os.urandom(16)
@@ -67,8 +74,8 @@ class Message:
             encrypted_aes_key = Message.encrypt_key(public_key, aes_key)
             self.symm_keys.append(encrypted_aes_key)
 
-    # Decrypt message with AES key
     def decrypt_with_aes(self, private_key: rsa.RSAPrivateKey, key: str, iv):
+        """Decrypt message using the AES key and the private key"""
         try:
             key = Message.decrypt_key(private_key, key)
 
@@ -88,10 +95,13 @@ class Message:
         self,
         recipient_public_keys: List[rsa.RSAPublicKey],
         destination_servers,
-        participants: List[str] = [],
+        participants: Optional[List[str]] = None,
     ):
         """Prepare an encrypted chat message, including AES key encryption."""
-        self.participants = participants
+        if self.participants is None:
+            self.participants = []
+        else:
+            self.participants = participants
         # Encrypt the message and generate keys
         self.encrypt_chat_message(recipient_public_keys)
 

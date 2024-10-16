@@ -1,12 +1,15 @@
+"""An application that runs the client through I/O inputs"""
+
 import asyncio
 import logging
 from argparse import ArgumentParser
 
-from src import Client
+from src.client import Client
 from src.utils import crypto
 
 
 async def prompt_input(prompt=""):
+    """Prompt input in a separate thread"""
     result = await asyncio.to_thread(input, f"{prompt}\n")
     return result.strip()
 
@@ -37,6 +40,7 @@ async def get_client_inputs(client: Client):
 
 
 async def handle_online_users(client: Client):
+    """Print the list of online users after requesting from the server"""
     await client.request_client_list()
 
     print("Online users:")
@@ -50,6 +54,7 @@ async def handle_online_users(client: Client):
 
 
 async def handle_chat(client: Client):
+    """Prompt input for recipients and message and send chat to those recipients"""
     await handle_online_users(client)
     num_participants = await prompt_input("Number of participants (excluding you): ")
     try:
@@ -105,6 +110,7 @@ async def handle_chat(client: Client):
 
 
 async def handle_public_chat(client: Client):
+    """Send public message to all users"""
     choice = await prompt_input("Send a public message or file? (m/f): ")
     if choice == "f":
         file_path = await prompt_input("Enter the file path: ")
@@ -154,7 +160,7 @@ client = Client(server_url)
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
-except:
+except KeyboardInterrupt:
     loop.run_until_complete(client.disconnect())
 finally:
     loop.close()

@@ -1,15 +1,19 @@
+"""A neighbourhood application that manages servers through I/O inputs"""
+
 import asyncio
 import logging
 from argparse import ArgumentParser
 from typing import Dict
 
-from src import Server
+from src.server import Server
 from src.utils import crypto
 
 logger = logging.getLogger(__name__)
 
 
 class Neighbourhood:
+    """A neighbourhood that manages the starting and stopping state of servers"""
+
     def __init__(self) -> None:
         self.servers: Dict[str, Server] = {}
         self.server_threads = {}
@@ -65,6 +69,7 @@ class Neighbourhood:
 
 
 async def prompt_input(prompt=""):
+    """Prompt input using a separate thread"""
     return await asyncio.to_thread(input, prompt)
 
 
