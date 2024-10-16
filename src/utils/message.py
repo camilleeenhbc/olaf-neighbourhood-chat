@@ -98,10 +98,8 @@ class Message:
         participants: Optional[List[str]] = None,
     ):
         """Prepare an encrypted chat message, including AES key encryption."""
-        if self.participants is None:
-            self.participants = []
-        else:
-            self.participants = participants
+        self.participants = [] if participants is None else participants
+
         # Encrypt the message and generate keys
         self.encrypt_chat_message(recipient_public_keys)
 
