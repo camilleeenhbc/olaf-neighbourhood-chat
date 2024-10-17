@@ -1,17 +1,18 @@
-import logging
-import json
-import os
-import src.utils.crypto as crypto
+"""Contains a `Server` class"""
+
 import asyncio
+import json
+import logging
+import os
 import uuid
+from typing import Optional
+
 import websockets
 import websockets.asyncio.server as websocket_server
-from typing import Optional
 from aiohttp import web
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
 
-from src.server_as_client import ServerAsClient
+from .server_as_client import ServerAsClient
+from .utils import crypto
 
 logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.INFO)
 
@@ -22,20 +23,16 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 
 
 class Server:
+    """
+    A server that talks to other servers, receives and sends client's messages
+    """
+
     def __init__(self, url: str = "localhost:80") -> None:
         self._websocket_server: Optional[websocket_server.Server] = None
-
         self.url = url
 
         self.counter = 0
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,  # modulus length
-            backend=default_backend(),
-        )
-        self.public_key = crypto.load_pem_public_key(
-            crypto.export_public_key(self.private_key.public_key())
-        )
+        self.private_key, self.public_key = crypto.generate_private_public_keys()
 
         # server address: {server public key, server counter}
         self.neighbour_servers = {}
@@ -48,6 +45,12 @@ class Server:
         self.mode = False
 
     async def add_neighbour_server(self, server_address: str, server_public_key: str):
+        """Save the URL and public key of the neighbouring server
+
+        Args:
+            server_address (str): URL of the neighbouring server
+            server_public_key (str): public key of the neighbouring server
+        """
         if server_address not in self.neighbour_servers:
             self.neighbour_servers[server_address] = {
                 "public_key": server_public_key,
@@ -73,10 +76,10 @@ class Server:
         try:
             websocket = await websockets.connect(f"ws://{neighbour_url}")
             await self.neighbourhood.add_active_server(neighbour_url, websocket)
-            logging.info(f"{self.url} connects to neighbour {neighbour_url}")
+            logging.info("%s connects to neighbour %s", self.url, neighbour_url)
         except Exception as e:
             logging.error(
-                f"{self.url} failed to connect to neighbour {neighbour_url}: {e}"
+                "%s failed to connect to neighbour %s: %s", self.url, neighbour_url, e
             )
 
     async def start(self):
@@ -96,11 +99,12 @@ class Server:
                 self._websocket_server.wait_closed(),  # Request client updates
             )
         except Exception as e:
-            logging.error(f"Error occurred in server: {e}")
+            logging.error("Error occurred in server: %s", e)
             await self.stop()
 
     async def stop(self):
-        logging.info(f"Closing {self.url}")
+        """Stop the server by sending empty client update and closing the websocket"""
+        logging.info("Closing %s", self.url)
         self.clients = {}
         await self.send_client_update()
 
@@ -108,7 +112,7 @@ class Server:
             self._websocket_server.close()
             await self._websocket_server.wait_closed()
 
-    async def listen(self, websocket):
+    async def listen(self, websocket: websocket_server.ServerConnection):
         """
         Listen and handle messages of type: signed_data, client_list_request,
         client_update_request, chat, hello, and public_chat
@@ -120,7 +124,7 @@ class Server:
             except websockets.ConnectionClosed as e:
                 logging.info("WebSocket connection closed: %s", e)
                 break
-            except Exception as e:
+            except RuntimeError as e:
                 logging.error("Error in WebSocket connection: %s", e)
                 break
 
@@ -132,10 +136,10 @@ class Server:
         if websocket in self.neighbour_websockets:
             neighbour_url = self.neighbour_websockets.pop(websocket)
             self.neighbourhood.remove_active_server(neighbour_url)
-            logging.info(f"{self.url} removes neighbour websocket: {neighbour_url}")
+            logging.info("%s removes neighbour websocket: %s", self.url, neighbour_url)
         elif websocket in self.clients:
             self.clients.pop(websocket)
-            logging.info(f"{self.url} removes client")
+            logging.info("%s removes client", self.url)
             await self.send_client_update()
 
     async def handle_message(
@@ -150,7 +154,9 @@ class Server:
             logging.warning("Whoops!")
             return
 
-        message = json.loads(message_str)
+        message = (
+            json.loads(message_str) if isinstance(message_str, str) else message_str
+        )
 
         message_type = message.get("type", None)
 
@@ -166,43 +172,43 @@ class Server:
             self.receive_client_update(websocket, message)
         elif message_type == "signed_data":
             self.signed_message = message
-            # should store public key here
-
-            # TODO: Handle counter and signature
+            counter = message.get("counter", None)
             signature = message.get("signature", None)
-
             if counter is None or signature is None:
                 logging.error(
-                    f"Cannot find counter or signature in this message: {message}"
+                    "Cannot find counter or signature in this message: %s", message
                 )
                 return
 
             data = message.get("data", None)
             if data is None:
                 logging.error(
-                    f"{self.url}: Cannot find `data` field for this message: {message}"
+                    "%s: Cannot find `data` field for this message: %s",
+                    self.url,
+                    message,
                 )
                 return
 
+            # Verify the signature if the client is known
             if websocket in self.clients:
                 public_key = self.clients[websocket]["public_key"]
                 public_key = crypto.load_pem_public_key(public_key)
-                if not crypto.verify_signature(
-                    public_key, signature, json.dumps(data), counter
-                ):
+
+                if not crypto.verify_signature(public_key, signature, data, counter):
                     logging.error(
-                        f"{self.url} message with invalid signature detected: {message_str}"
+                        "%s message with invalid signature detected: %s",
+                        self.url,
+                        message_str,
                     )
                     return
 
-            if isinstance(data, str):
-                data = json.loads(data)
+            data = json.loads(data) if isinstance(data, str) else data
 
-            message["data"] = data
+            message["data"] = data  # Ensure data is parsed JSON object
 
-            # Handle chats
+            # Further processing based on `data["type"]`
             message_type = data.get("type", None)
-            logging.info(f"{self.url} receives {message_type} message")
+            logging.info("%s receives %s message", self.url, message_type)
             if message_type == "chat":
                 await self.receive_chat(websocket, message)
             elif message_type == "hello":
@@ -212,9 +218,11 @@ class Server:
             elif message_type == "server_hello":
                 await self.receive_server_hello(websocket, message)
             else:
-                logging.error(f"{self.url}: Type not found for this message: {message}")
+                logging.error(
+                    "%s: Type not found for this message: %s", self.url, message
+                )
         else:
-            logging.error(f"{self.url}: Type not found for this message: {message}")
+            logging.error("%s: Type not found for this message: %s", self.url, message)
 
     async def reset_counters(self, websocket):
         for client_ws in self.clients:
@@ -227,12 +235,14 @@ class Server:
     async def send_response(
         self, websocket: websocket_server.ServerConnection, message
     ):
+        """Send message as a respond to the corresponding client/server connection"""
         try:
             await websocket.send(json.dumps(message))
-        except Exception as e:
-            logging.error(f"{self.url} failed to send response: {e}")
+        except (websockets.ConnectionClosed, TypeError) as e:
+            logging.error("%s failed to send response: %s", self.url, e)
 
     async def receive_server_hello(self, websocket, message):
+        """Handle `server_hello` message type"""
         counter = int(message.get("counter", "0"))
         signature = message.get("signature", None)
         data = message.get("data", {})
@@ -242,7 +252,7 @@ class Server:
 
         recorded_counter = self.neighbour_servers[sender_address].get("counter", 0)
         if counter < recorded_counter:
-            logging.error(f"{self.url} receives server_hello with wrong counter")
+            logging.error("%s receives server_hello with wrong counter", self.url)
             return
 
         self.neighbour_servers[sender_address]["counter"] = recorded_counter
@@ -253,25 +263,26 @@ class Server:
         if not crypto.verify_signature(
             public_key, signature, json.dumps(data), counter
         ):
-            logging.error(f"{self.url} cannot verify signature for server_hello")
+            logging.error("%s cannot verify signature for server_hello", self.url)
             return
 
-        logging.info(f"{self.url} accepts server hello from {sender_address}")
+        logging.info("%s accepts server hello from %s", self.url, sender_address)
         # Map the server connection to this address and establish a client connection
         self.neighbour_websockets[websocket] = sender_address
         await self.connect_to_neighbour(sender_address)
 
     def validate_client_counter(self, websocket, message):
+        """Validate the counter found in the message"""
         sender = self.clients.get(websocket)
         if not sender:
-            logging.error(f"{self.url} message from unknown client detected")
+            logging.error("%s message from unknown client detected", self.url)
             return False
 
         # Check if the counter is larger or equal to the counter saved in the server
         sender["counter"] = sender.get("counter", "0")
 
         if int(message["counter"]) < int(sender["counter"]):
-            logging.error(f"{self.url} message with replay attack detected")
+            logging.error("%s message with replay attack detected", self.url)
             return False
 
         # Increment counter
@@ -294,36 +305,42 @@ class Server:
                 return websocket
         return None
 
-    # recieve private chat
     async def receive_chat(self, websocket, message):
-        destination_servers = message["data"].get("destination_servers", None)
-        if destination_servers is None:
-            logging.error(f"{self.url} receives invalid chat message: {message}")
+        """Handle receiving `chat` message type"""
+        data = message.get("data")
+        if isinstance(data, str):
+            data = json.loads(data)
+        destination_servers = data.get("destination_servers", [])
+        if len(destination_servers) == 0:
+            logging.error("%s receives invalid chat message: %s", self.url, message)
 
-        if self.url not in destination_servers and not self.validate_client_counter(
-            websocket, message
-        ):
-            return
+        # If this is the server of the sender
+        if websocket in self.clients:
+            if not self.validate_client_counter(websocket, message):
+                return
 
-        # Handle chat message in the destination server
-        if self.url in destination_servers:
-            logging.info(f"{self.url} receives chat as the destination server")
-
-            for client_websocket in self.clients:
-                await self.send_response(client_websocket, message)
-
-        else:
-            # forward the message to destination servers
+            # Forward the message to destination servers
             for server_url in destination_servers:
+                # Handle chat message in the destination server
+                if server_url == self.url:
+                    continue
+
                 websocket = self.neighbourhood.find_active_server(server_url)
                 if websocket is None:
                     logging.error(
-                        f"{self.url} cannot find destination server {server_url}"
+                        "%s cannot find destination server %s", self.url, server_url
                     )
                     continue
 
-                logging.info(f"{self.url} forwards private chat to {server_url}")
+                logging.info("%s forwards private chat to %s", self.url, server_url)
                 await self.neighbourhood.send_request(websocket, message)
+
+        # Handle chat message in the destination server
+        if self.url in destination_servers:
+            logging.info("%s receives chat as the destination server", self.url)
+
+            for client_websocket in self.clients:
+                await self.send_response(client_websocket, message)
 
     async def receive_hello(self, websocket, message):
         """Save client's public key and send client update to other servers"""
@@ -339,10 +356,18 @@ class Server:
 
     # receive public chats and braodcast to connected clients and other neighbourhoods if valid message
     async def receive_public_chat(self, websocket, request):
-        logging.info(f"{self.url} received public chat message")
+        """
+        Receive public chats and braodcast to connected
+        clients and other neighbourhoods if valid message
+        """
+        logging.info("%s received public chat message", self.url)
 
         fingerprint = request["data"].get("sender", None)
         message = request["data"].get("message", None)
+        counter = request.get("counter", None)
+        if counter is None or fingerprint is None or message is None:
+            logging.error("%s received an invalid public_chat message", self.url)
+            return
 
         admin = self.check_admin(message)
         if admin:
@@ -387,7 +412,7 @@ class Server:
 
     async def send_client_list(self, websocket):
         """(Between server and client) Provide the client the client list on all servers"""
-        logging.info(f"{self.url} sends client list")
+        logging.info("%s sends client list", self.url)
 
         all_clients = self.neighbourhood.clients_across_servers
         # Reformat the each server's client list
@@ -427,11 +452,11 @@ class Server:
         }
 
         if websocket is None:
-            logging.info(f"{self.url} sends client update to all servers")
+            logging.info("%s sends client update to all servers", self.url)
             await self.neighbourhood.broadcast_request(response)
         else:
             neighbour_url = self.neighbour_websockets[websocket]
-            logging.info(f"{self.url} sends client update to {neighbour_url}")
+            logging.info("%s sends client update to %s", self.url, neighbour_url)
             await self.send_response(websocket, response)
 
     async def request_client_update(self):
@@ -439,7 +464,7 @@ class Server:
         (Between servers) Send request client update to all servers.
         Expect to receive an updated client list for each server.
         """
-        logging.info(f"{self.url} requests client update from all servers")
+        logging.info("%srequests client update from all servers", self.url)
 
         request = {
             "type": "client_update_request",
@@ -451,16 +476,17 @@ class Server:
             self.receive_client_update(websocket, message)
 
     def receive_client_update(self, websocket, message):
+        """Handle `client_update` message type"""
         clients = message["clients"]
         if websocket in self.neighbour_websockets:
             neighbour_url = self.neighbour_websockets[websocket]
         elif websocket in self.neighbourhood.active_servers:
             neighbour_url = self.neighbourhood.active_servers[websocket]
         else:
-            logging.error(f"{self.url} receives client_update from invalid websocket")
+            logging.error("%s receives client_update from invalid websocket", self.url)
             return
 
-        logging.info(f"{self.url} receives client update from {neighbour_url}")
+        logging.info("%s receives client update from %s", self.url, neighbour_url)
         self.neighbourhood.save_clients(neighbour_url, clients)
 
     async def start_http_server(self, address, port: int):
@@ -478,7 +504,7 @@ class Server:
         await site.start()
 
         # Confirm server is running and log the port
-        logging.info(f"HTTP server running on port: {str(http_port)}")
+        logging.info("HTTP server running on port: %s", str(http_port))
 
     async def handle_file_upload(self, request):
         """Handle file upload via HTTP POST"""
@@ -491,7 +517,11 @@ class Server:
             filename = field.filename
             file_extension = os.path.splitext(filename)[1]  # Get file extension
             unique_id = str(uuid.uuid4())  # Generate unique UUID
-            unique_filename = f"{os.path.splitext(filename)[0]}-{unique_id}{file_extension}"  # Append UUID to filename
+
+            # Append UUID to filename
+            unique_filename = (
+                f"{os.path.splitext(filename)[0]}-{unique_id}{file_extension}"
+            )
             file_path = os.path.join(UPLOAD_DIRECTORY, unique_filename)
 
             size = 0
@@ -511,7 +541,7 @@ class Server:
 
                     f.write(chunk)
 
-            logging.info(f"File {filename} saved at {file_path}")
+            logging.info("File %s saved at %s", filename, file_path)
 
             file_url = f"{request.url.scheme}://{request.url.host}:{request.url.port}/{unique_id}"
             return web.json_response({"response": {"body": {"file_url": file_url}}})

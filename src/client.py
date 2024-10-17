@@ -1,33 +1,30 @@
-import json
-import websockets
-import asyncio
-import logging
-import src.utils.crypto as crypto
-import aiohttp
-import base64
+"""Contains a `Client` class"""
 
-from typing import List, Optional, Union, Dict
-from websockets import connect
+import asyncio
+import base64
+import json
+import logging
+from typing import Dict, List, Optional, Union
+
+import aiohttp
+import websockets
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
-from src.utils.message import Message
+from websockets import connect
+
+from .utils import crypto
+from .utils.message import Message
 
 
 class Client:
+    """A client that talks to other clients through the specified server"""
+
     def __init__(self, server_url):
         self.counter = 0
         self.hostname = server_url.split(":")[0]
         self.port = int(server_url.split(":")[1])
         self.server_url = server_url
 
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,  # modulus length
-            backend=default_backend(),
-        )
-        self.public_key = crypto.load_pem_public_key(
-            crypto.export_public_key(self.private_key.public_key())
-        )
+        self.private_key, self.public_key = crypto.generate_private_public_keys()
 
         self.fingerprint = crypto.generate_fingerprint(self.public_key)
         self.websocket = None
@@ -79,24 +76,23 @@ class Client:
         return public_keys
 
     def sign_message(self, message: str):
-        self.signature = crypto.sign_message(message, self.counter, self.private_key)
-        return self.signature
+        """Returns the signature after signing the message"""
+        return crypto.sign_message(message, self.counter, self.private_key)
 
     # CONNECT TO SERVER
     async def connect_to_server(self):
         """Create connection to server"""
         try:
-            self.websocket = await connect(f"ws://{self.hostname}:{self.port}")
-            logging.info(f"Connected to {self.hostname}:{self.port}")
+            self.websocket = await connect(f"ws://{self.server_url}")
+            logging.info("Connected to %s", self.server_url)
             await self.send_message(self.websocket, chat_type="hello")
             listen_thread = asyncio.create_task(self.listen(self.websocket))
             await self.request_client_list()  # fetch online users
             await listen_thread
         except websockets.ConnectionClosed:
-            logging.info("Disconnected")
-            await self.disconnect()
+            logging.info("Disconnected from %s", self.server_url)
         except Exception as e:
-            logging.error(f"Failed to connect to {self.hostname}:{self.port}: {e}")
+            logging.error("Failed to connect to %s: %s", self.server_url, e)
         finally:
             await self.disconnect()
 
@@ -105,6 +101,7 @@ class Client:
         if self.websocket:
             logging.info("Disconnecting")
             await self.websocket.close()
+            self.websocket = None
 
     async def listen(self, websocket):
         """Listen for incoming messages"""
@@ -113,7 +110,7 @@ class Client:
                 data = json.loads(message)
                 asyncio.create_task(self.receive_message(data))
         except Exception as e:
-            logging.error(f"Error in receiving message: {e}")
+            logging.error("Error in receiving message: %s", e)
 
     # SEND MESSAGE
     async def send_message(
@@ -121,9 +118,9 @@ class Client:
         websocket,
         message_content="",
         chat_type="chat",
-        destination_servers=[],
-        recipient_public_keys: List[rsa.RSAPublicKey] = [],
-        participants=[],
+        destination_servers: Optional[List[str]] = None,
+        recipient_public_keys: Optional[List[rsa.RSAPublicKey]] = None,
+        participants: Optional[List[str]] = None,
     ):
         """
         Send different types of messages
@@ -159,18 +156,20 @@ class Client:
         # Inrement counter
         self.counter += 1
 
+        message_string = json.dumps(message_data)
         signed_message = {
             "type": "signed_data",
-            "data": message_data,
+            "data": message_string,
             "counter": self.counter,
-            "signature": self.sign_message(json.dumps(message_data)),
+            "signature": self.sign_message(message_string),
         }
 
         await websocket.send(json.dumps(signed_message))
         # print(signed_message)
-        logging.info(f"Sent {chat_type} message.")
+        logging.info("Sent %s message.", chat_type)
 
     async def request_client_list(self):
+        """Ask for `client_list` message by sending `client_list_request` message"""
         self.client_list_event.clear()
         request = {
             "type": "client_list_request",
@@ -189,9 +188,10 @@ class Client:
         elif message_type == "signed_data":
             await self.handle_signed_data(data)
         else:
-            logging.error(f"Invalid message: {data}")
+            logging.error("Invalid message: %s", data)
 
     def handle_client_list(self, data):
+        """Handle `client_list` message type"""
         servers = data.get("servers", None)
         if servers is None:
             logging.error("Invalid client_list format")
@@ -202,7 +202,7 @@ class Client:
 
             # Transform public key string to public key object
             self.online_users[server_address] = []
-            for i, public_key in enumerate(clients):
+            for _, public_key in enumerate(clients):
                 public_key = crypto.load_pem_public_key(public_key)
                 self.online_users[server_address].append(
                     {
@@ -258,11 +258,13 @@ class Client:
                     logging.error("Cannot get public key from public chat sender")
                     return
 
-                if crypto.verify_signature(
-                    sender_public_key, signature, json.dumps(public_message), counter
+                public_message = message.get("message", "")
+                if not crypto.verify_signature(
+                    sender_public_key, signature, json.dumps(message), counter
                 ):
                     logging.error(
-                        f"Signature verification failed for sender: {sender_fingerprint}"
+                        "Signature verification failed for sender: %s",
+                        sender_fingerprint,
                     )
                     return
 
@@ -271,7 +273,7 @@ class Client:
                 output += f"    {public_message}\n"
                 print(output)
         except Exception as e:
-            logging.error(f"Error processing public chat message: {e}")
+            logging.error("Error processing public chat message: %s", e)
 
     async def handle_chat(self, signature: str, message: dict, counter):
         """
@@ -300,22 +302,22 @@ class Client:
 
             chat = json.loads(chat)
             participants: list = chat.get("participants", [])
+            sender_fingerprint = participants[0]
 
             # Get sender's public key from fingerprint
-            public_keys = self.get_public_keys_from_fingerprints(participants)
-            if len(public_keys) == 0:
-                logging.error("Cannot get public keys for every participants")
-                return
-
-            sender_server_address, sender_public_key = public_keys[0]
+            sender_server_address, sender_public_key = (
+                self.get_public_key_from_fingerprint(sender_fingerprint)
+            )
             if sender_public_key is None:
-                logging.error("Cannot get public key from chat sender")
+                logging.error("Cannot get public key from public chat sender")
                 return
 
-            if crypto.verify_signature(
+            if not crypto.verify_signature(
                 sender_public_key, signature, json.dumps(message), counter
             ):
-                logging.error("Signature verification failed for sender")
+                logging.error(
+                    "Signature verification failed for sender %s", sender_fingerprint
+                )
                 return
 
             output = f"(Chat) ({', '.join(participants)})\n"
@@ -324,7 +326,7 @@ class Client:
             print(output)
 
         except Exception as e:
-            logging.error(f"Error processing chat message: {e}")
+            logging.error("Error processing chat message: %s", e)
 
     async def upload_file(self, filename):
         """Upload a file to the server using an HTTP POST request"""
@@ -334,17 +336,18 @@ class Client:
                 files = {"file": f}
                 # POST request
                 async with session.post(url, data=files) as response:
-                    if response.status == 200:
+                    if response.ok:
                         json_response = await response.json()
                         logging.info("File uploaded successfully.")
                         return json_response["response"]["body"]["file_url"]
-                    elif response.status == 413:
+
+                    if response.status == 413:
                         logging.error(
                             "File too large. Server returned 413 Payload Too Large."
                         )
                     else:
                         logging.error(
-                            f"Failed to upload file. Status code: {response.status}"
+                            "Failed to upload file. Status code: %i", response.status
                         )
                         logging.error(await response.text())
 
@@ -356,31 +359,28 @@ class Client:
             # Create a new aiohttp session
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
-                    if response.status == 200:
-                        # Retrieve the filename from the headers
-                        content_disposition = response.headers.get(
-                            "Content-Disposition"
-                        )
-                        original_filename = content_disposition.split('filename="')[1][
-                            :-1
-                        ]
-
-                        # Save the file with its original filename
-                        with open(original_filename, "wb") as f:
-                            while True:
-                                chunk = await response.content.read(1024)
-                                if not chunk:
-                                    break
-                                f.write(chunk)
-
-                        logging.info(
-                            f"File {original_filename} downloaded successfully."
-                        )
-                    else:
+                    if not response.ok:
                         logging.error(
-                            f"Failed to download file: {response.status} {await response.text()}"
+                            "Failed to download file: %i %s",
+                            response.status,
+                            await response.text(),
                         )
+                        return
+
+                    # Retrieve the filename from the headers
+                    content_disposition = response.headers.get("Content-Disposition")
+                    original_filename = content_disposition.split('filename="')[1][:-1]
+
+                    # Save the file with its original filename
+                    with open(original_filename, "wb") as f:
+                        while True:
+                            chunk = await response.content.read(1024)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+
+                    logging.info("File %s downloaded successfully.", original_filename)
         except aiohttp.ClientError as e:
-            logging.error(f"Error downloading file: {e}")
+            logging.error("Error downloading file: %s", e)
         except Exception as e:
-            logging.error(f"Unexpected error during file download: {e}")
+            logging.error("Unexpected error during file download: %s", e)

@@ -1,16 +1,21 @@
+"""An application that runs the client through I/O inputs"""
+
 import asyncio
 import logging
-import src.utils.crypto as crypto
-from client import Client
 from argparse import ArgumentParser
+
+from src.client import Client
+from src.utils import crypto
 
 
 async def prompt_input(prompt=""):
+    """Prompt input in a separate thread"""
     result = await asyncio.to_thread(input, f"{prompt}\n")
     return result.strip()
 
 
 async def get_client_inputs(client: Client):
+    """Prompt client inputs"""
     print("\n--- MENU ---")
     print("1. View online users")
     print("2. Chat with a user")
@@ -36,6 +41,7 @@ async def get_client_inputs(client: Client):
 
 
 async def handle_online_users(client: Client):
+    """Print the list of online users after requesting from the server"""
     await client.request_client_list()
 
     print("Online users:")
@@ -49,6 +55,7 @@ async def handle_online_users(client: Client):
 
 
 async def handle_chat(client: Client):
+    """Prompt input for recipients and message and send chat to those recipients"""
     await handle_online_users(client)
     num_participants = await prompt_input("Number of participants (excluding you): ")
     try:
@@ -104,6 +111,7 @@ async def handle_chat(client: Client):
 
 
 async def handle_public_chat(client: Client):
+    """Send public message to all users"""
     choice = await prompt_input("Send a public message or file? (m/f): ")
     if choice == "f":
         file_path = await prompt_input("Enter the file path: ")
@@ -120,17 +128,32 @@ async def handle_public_chat(client: Client):
 
 
 async def handle_download_file(client: Client):
+    """Download a file from the input file URL"""
     file_url = await prompt_input("Enter the file URL: ")
     await client.download_file(file_url)
 
 
 async def main(client: Client):
+    """Maintain client's connection with server and prompt inputs"""
     await asyncio.wait(
         [
             asyncio.create_task(client.connect_to_server()),
             asyncio.create_task(get_client_inputs(client)),
         ]
     )
+
+
+def run(server_url):
+    """Run a client that connects to the specified server's URL and prompt I/O inputs"""
+    client = Client(server_url)
+
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(main(client))
+    except KeyboardInterrupt:
+        loop.run_until_complete(client.disconnect())
+    finally:
+        loop.close()
 
 
 parser = ArgumentParser()
@@ -144,16 +167,4 @@ if args.debug:
 else:
     logging.basicConfig(format="%(levelname)s:\t%(message)s", level=logging.WARNING)
 
-
-server_url = args.url
-
-# Client connects to server
-client = Client(server_url)
-
-loop = asyncio.get_event_loop()
-try:
-    loop.run_until_complete(main(client))
-except:
-    loop.run_until_complete(client.disconnect())
-finally:
-    loop.close()
+run(args.url)

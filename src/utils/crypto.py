@@ -1,8 +1,23 @@
+"""Functions related to cryptography, including public key handling, signature, and fingerprint"""
+
 import base64
 import hashlib
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
+from cryptography.exceptions import InvalidSignature
+
+
+def generate_private_public_keys():
+    """Return a tuple of private and public keys"""
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,  # modulus length
+        backend=default_backend(),
+    )
+
+    public_key = load_pem_public_key(export_public_key(private_key.public_key()))
+    return private_key, public_key
 
 
 def generate_fingerprint(public_key: rsa.RSAPublicKey):
@@ -15,6 +30,7 @@ def generate_fingerprint(public_key: rsa.RSAPublicKey):
 
 
 def load_pem_public_key(public_key_str: str):
+    """Convert the PEM public key string into a `RSAPublicKey` object"""
     return serialization.load_pem_public_key(
         public_key_str.encode(), backend=default_backend()
     )
@@ -32,7 +48,7 @@ def sign_message(message: str, counter, private_key: rsa.RSAPrivateKey):
     """Returns the signature after signing the message"""
     # Sign the message using the RSA-PSS scheme
     # Signature should be Base64 of data + counter
-    message_bytes = message.encode() + str(counter).encode()
+    message_bytes = message.encode("utf-8") + str(counter).encode("utf-8")
     signature = private_key.sign(
         message_bytes,
         padding.PSS(
@@ -41,15 +57,15 @@ def sign_message(message: str, counter, private_key: rsa.RSAPrivateKey):
         ),
         hashes.SHA256(),
     )
-    return base64.b64encode(signature).decode()
+    return base64.b64encode(signature).decode("utf-8")
 
 
 def verify_signature(
     public_key: rsa.RSAPublicKey, signature: str, message: str, counter
 ):
+    """Verify signature using sender's public key and the original message data"""
     try:
-        # Verify signature using sender's public key and the original message data
-        message_bytes = message.encode() + str(counter).encode()
+        message_bytes = message.encode("utf-8") + str(counter).encode("utf-8")
         public_key.verify(
             base64.b64decode(signature),
             message_bytes,
@@ -60,5 +76,6 @@ def verify_signature(
             hashes.SHA256(),
         )
         return True
-    except Exception:
+    except InvalidSignature:
+        print("Invalid signature.")
         return False
