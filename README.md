@@ -36,12 +36,12 @@ This script reads the command line arguments and I/O input to add new servers, s
 
 For example, to start three servers `localhost:8080`, `localhost:8081`, and `localhost:8082`, use this following command.
 ```bash
-python -m src.neighbourhood --start --urls localhost:8080 localhost:8081 localhost:8082
+python -m neighbourhood --start --urls localhost:8080 localhost:8081 localhost:8082
 ```
 
 For more control, please use I/O inputs to execute the command. This following command is the I/O version of the command above.
 ```bash
-python -m src.neighbourhood
+python -m neighbourhood
 
 # In I/O input
 # Add servers to the neighbourhood - the servers share address and public key with each other
@@ -61,7 +61,7 @@ To stop the script, enter `q` to quit the program.
 ## Client
 Use the following command to run the client (for example, to connect with the server at `localhost:8080`).
 ```bash
-python -m src.main --url localhost:8080
+python -m main --url localhost:8080
 ```
 
 Follow the I/O input instructions printed in the terminal to view online users, send chats, and download file.
