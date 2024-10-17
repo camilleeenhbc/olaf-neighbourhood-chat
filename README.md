@@ -1,4 +1,4 @@
-# Secure-programming-implementation
+# Group 25 - Secure Programming
 OLAF Neighbourhood Protocol - Secure Programming
 
 ## Student Names and Numbers
