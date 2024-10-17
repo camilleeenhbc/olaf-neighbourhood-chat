@@ -1,4 +1,4 @@
-# olaf-s-biggest-fans-
+# Group 25 - Secure Programming
 OLAF Neighbourhood Protocol - Secure Programming
 
 ## Student Names and Numbers
