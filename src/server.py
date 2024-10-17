@@ -75,7 +75,7 @@ class Server:
             websocket = await websockets.connect(f"ws://{neighbour_url}")
             await self.neighbourhood.add_active_server(neighbour_url, websocket)
             logging.info("%s connects to neighbour %s", self.url, neighbour_url)
-        except websockets.ConnectionClosed as e:
+        except Exception as e:
             logging.error(
                 "%s failed to connect to neighbour %s: %s", self.url, neighbour_url, e
             )
